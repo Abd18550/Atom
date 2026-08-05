@@ -1,0 +1,23 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt";"strings")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	pool := []string{"Go","is","fun","I","love","coding","in","the","world","hello","great","atom","platform","learn"}
+	for i := 0; i < 8; i++ {
+		n := rand.Intn(5)+2
+		words := make([]string, n)
+		for j := 0; j < n; j++ { words[j] = pool[rand.Intn(len(pool))] }
+		sentence := strings.Join(words, " ")
+		Compare(solution.ReverseWords(sentence), student.ReverseWords(sentence), fmt.Sprintf("ReverseWords(\"%s\")", sentence))
+	}
+	for i := 0; i < 5; i++ {
+		n := rand.Intn(5)+2
+		words := make([]string, n)
+		for j := 0; j < n; j++ { words[j] = GenerateRandomString(rand.Intn(10)+3) }
+		sentence := strings.Join(words, " ")
+		Compare(solution.ReverseWords(sentence), student.ReverseWords(sentence), fmt.Sprintf("ReverseWords(\"%s\") (random)", sentence))
+	}
+	Compare(solution.ReverseWords("one"), student.ReverseWords("one"), "ReverseWords(\"one\")")
+	Compare(solution.ReverseWords(""), student.ReverseWords(""), "ReverseWords(\"\")")
+	Success()
+}

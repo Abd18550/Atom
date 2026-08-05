@@ -1,0 +1,9 @@
+# Backend build artifacts
+backend
+*.exe
+*.db
+*.log
+*.pid
+.env
+go.work
+go.work.sum

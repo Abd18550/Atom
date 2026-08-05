@@ -1,0 +1,3 @@
+package solution
+import "strconv"
+func CountDigits(n int) int { return len(strconv.Itoa(n)) }

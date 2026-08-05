@@ -1,0 +1,13 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		w := rand.Intn(50)+1
+		h := rand.Intn(50)+1
+		r := student.Rectangle{Width:w,Height:h}
+		Compare(w*h, r.Area(), fmt.Sprintf("Rectangle{%d,%d}.Area()", w, h))
+	}
+	Compare(1, student.Rectangle{Width:1,Height:1}.Area(), "Rectangle{1,1}.Area()")
+	Success()
+}

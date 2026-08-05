@@ -1,0 +1,27 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	pool := []string{"Go","Hello","World","Hi","Atom","Code","Test","Fun","Learn","Program","Run","Build"}
+	for i := 0; i < 6; i++ {
+		n := rand.Intn(4)+2
+		words := make([]string, n)
+		for j := 0; j < n; j++ { words[j] = pool[rand.Intn(len(pool))] }
+		sMap := solution.WordLengths(words)
+		uMap := student.WordLengths(words)
+		for _, w := range words {
+			Compare(sMap[w], uMap[w], fmt.Sprintf("WordLengths(%v)[\"%s\"]", words, w))
+		}
+	}
+	for i := 0; i < 5; i++ {
+		n := rand.Intn(4)+2
+		words := make([]string, n)
+		for j := 0; j < n; j++ { words[j] = GenerateRandomString(rand.Intn(8) + 2) }
+		sMap := solution.WordLengths(words)
+		uMap := student.WordLengths(words)
+		for _, w := range words {
+			Compare(sMap[w], uMap[w], fmt.Sprintf("WordLengths(%v)[\"%s\"] (random)", words, w))
+		}
+	}
+	Success()
+}

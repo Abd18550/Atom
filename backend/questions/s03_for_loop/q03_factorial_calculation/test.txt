@@ -1,0 +1,13 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		n := rand.Intn(12) + 1
+		Compare(solution.Factorial(n), student.Factorial(n), fmt.Sprintf("Factorial(%d)", n))
+	}
+	Compare(solution.Factorial(0), student.Factorial(0), "Factorial(0)")
+	Compare(solution.Factorial(1), student.Factorial(1), "Factorial(1)")
+	Compare(solution.Factorial(10), student.Factorial(10), "Factorial(10)")
+	Success()
+}

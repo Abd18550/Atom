@@ -1,0 +1,3 @@
+package solution
+type Point struct{ X,Y int }
+func DistanceSquared(p1,p2 Point) int { return (p1.X-p2.X)*(p1.X-p2.X) + (p1.Y-p2.Y)*(p1.Y-p2.Y)}

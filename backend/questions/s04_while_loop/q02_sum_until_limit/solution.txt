@@ -1,0 +1,2 @@
+package solution
+func SumUntil(limit int) int { s:=0; i:=1; for s<limit {s+=i; if s>=limit {return i}; i++}; return i }

@@ -1,0 +1,4 @@
+package solution
+import "strconv"
+func IntToStr(n int) string { return strconv.Itoa(n) }
+func StrToInt(s string) int { n, _ := strconv.Atoi(s); return n }

@@ -1,0 +1,13 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		side := rand.Intn(50)+1
+		s := student.NewSquare(side)
+		Compare(side*side, s.Area(), fmt.Sprintf("Square{%d}.Area()", side))
+	}
+	s := student.NewSquare(1); Compare(1, s.Area(), "Square{1}.Area()")
+	s2 := student.NewSquare(100); Compare(10000, s2.Area(), "Square{100}.Area()")
+	Success()
+}

@@ -1,0 +1,2 @@
+package solution
+func Contains(a []int, t int) bool { for _,v:=range a {if v==t {return true}}; return false}

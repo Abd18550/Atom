@@ -1,0 +1,21 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		a := rand.Intn(200)-100
+		b := rand.Intn(20)+1
+		sVal, sErr := solution.SafeDivide(a, b)
+		uVal, uErr := student.SafeDivide(a, b)
+		Compare(sVal, uVal, fmt.Sprintf("SafeDivide(%d, %d) value", a, b))
+		Compare(sErr, uErr, fmt.Sprintf("SafeDivide(%d, %d) error", a, b))
+	}
+	for i := 0; i < 3; i++ {
+		a := rand.Intn(100)
+		sVal, sErr := solution.SafeDivide(a, 0)
+		uVal, uErr := student.SafeDivide(a, 0)
+		Compare(sVal, uVal, fmt.Sprintf("SafeDivide(%d, 0) value", a))
+		Compare(sErr, uErr, fmt.Sprintf("SafeDivide(%d, 0) error", a))
+	}
+	Success()
+}

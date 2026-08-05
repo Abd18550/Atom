@@ -1,0 +1,17 @@
+package main
+import ("os/exec"; "strings"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	names := []string{"World","Go","Ali","Sarah","Omar","Atom","Student","Coder","Hacker","Developer"}
+	for i := 0; i < 6; i++ {
+		name := names[rand.Intn(len(names))]
+		out, _ := exec.Command("go", "run", "student/main.go", name).Output()
+		Compare(fmt.Sprintf("Hello, %s!", name), strings.TrimSpace(string(out)), fmt.Sprintf("go run main.go %s", name))
+	}
+	for i := 0; i < 4; i++ {
+		name := GenerateRandomString(rand.Intn(10) + 4)
+		out, _ := exec.Command("go", "run", "student/main.go", name).Output()
+		Compare(fmt.Sprintf("Hello, %s!", name), strings.TrimSpace(string(out)), fmt.Sprintf("go run main.go %s (random)", name))
+	}
+	Success()
+}

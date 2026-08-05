@@ -1,0 +1,16 @@
+package main
+import (
+	"fmt"
+	"sandbox/solution"
+	"sandbox/student"
+)
+func main() {
+	testcases := "abcdefghijklmnopqrstuvwxyz"
+	for _, char := range testcases {
+		studentAns := student.EncodeVowel(char)
+		rightAns := solution.EncodeVowel(char)
+		msg := fmt.Sprintf("Testing with letter: %c", char)
+		Compare(rightAns, studentAns, msg)
+	}
+	Success()
+}

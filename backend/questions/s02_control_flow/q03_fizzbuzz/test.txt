@@ -1,0 +1,15 @@
+package main
+import ("sandbox/student"; "sandbox/solution"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		n := rand.Intn(100) + 1
+		Compare(solution.FizzBuzz(n), student.FizzBuzz(n), fmt.Sprintf("FizzBuzz(%d)", n))
+	}
+	Compare(solution.FizzBuzz(15), student.FizzBuzz(15), "FizzBuzz(15)")
+	Compare(solution.FizzBuzz(3), student.FizzBuzz(3), "FizzBuzz(3)")
+	Compare(solution.FizzBuzz(5), student.FizzBuzz(5), "FizzBuzz(5)")
+	Compare(solution.FizzBuzz(30), student.FizzBuzz(30), "FizzBuzz(30)")
+	Compare(solution.FizzBuzz(7), student.FizzBuzz(7), "FizzBuzz(7)")
+	Success()
+}

@@ -1,0 +1,2 @@
+package solution
+func WordLengths(words []string) map[string]int { m:=make(map[string]int); for _,w:=range words{m[w]=len(w)}; return m }

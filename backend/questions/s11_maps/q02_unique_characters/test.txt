@@ -1,0 +1,17 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	pool := []string{"hello","aaa","abcabc","Go","","abcdefg","mississippi","test","programming","aaabbbccc","xyz","aeiou"}
+	for i := 0; i < 10; i++ {
+		t := pool[rand.Intn(len(pool))]
+		Compare(solution.UniqueCount(t), student.UniqueCount(t), fmt.Sprintf("UniqueCount(\"%s\")", t))
+	}
+	for i := 0; i < 5; i++ {
+		t := GenerateRandomString(rand.Intn(20) + 5)
+		Compare(solution.UniqueCount(t), student.UniqueCount(t), fmt.Sprintf("UniqueCount(\"%s\") (random)", t))
+	}
+	Compare(solution.UniqueCount(""), student.UniqueCount(""), "UniqueCount(\"\")")
+	Compare(solution.UniqueCount("a"), student.UniqueCount("a"), "UniqueCount(\"a\")")
+	Success()
+}

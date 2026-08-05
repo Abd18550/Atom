@@ -1,0 +1,12 @@
+package main
+import ("sandbox/student"; "sandbox/solution"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		a, b := rand.Intn(200)-100, rand.Intn(200)-100
+		Compare(solution.Add(a, b), student.Add(a, b), fmt.Sprintf("Add(%d, %d)", a, b))
+	}
+	Compare(solution.Add(0, 0), student.Add(0, 0), "Add(0, 0)")
+	Compare(solution.Add(-50, 50), student.Add(-50, 50), "Add(-50, 50)")
+	Success()
+}

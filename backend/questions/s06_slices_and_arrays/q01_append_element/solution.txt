@@ -1,0 +1,2 @@
+package solution
+func AppendElement(arr []int, n int) []int { return append(arr, n) }

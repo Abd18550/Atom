@@ -1,0 +1,2 @@
+package solution
+func DoubleElements(arr []int) []int { r:=make([]int,len(arr)); for i,v:=range arr{r[i]=v*2}; return r }

@@ -1,0 +1,13 @@
+package main
+import ("sandbox/student"; "sandbox/solution"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		age := rand.Intn(50)
+		Compare(solution.IsAdult(age), student.IsAdult(age), fmt.Sprintf("IsAdult(%d)", age))
+	}
+	Compare(solution.IsAdult(18), student.IsAdult(18), "IsAdult(18)")
+	Compare(solution.IsAdult(0), student.IsAdult(0), "IsAdult(0)")
+	Compare(solution.IsAdult(17), student.IsAdult(17), "IsAdult(17)")
+	Success()
+}

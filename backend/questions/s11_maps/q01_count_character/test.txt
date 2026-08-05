@@ -1,0 +1,20 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	words := []string{"hello","banana","programming","mississippi","aardvark","bookkeeper","abcabc","zzz","test"}
+	chars := []rune{'a','b','e','i','l','m','o','p','s','t','z'}
+	for i := 0; i < 10; i++ {
+		w := words[rand.Intn(len(words))]
+		c := chars[rand.Intn(len(chars))]
+		Compare(solution.CountChar(w,c), student.CountChar(w,c), fmt.Sprintf("CountChar(\"%s\",'%c')", w, c))
+	}
+	for i := 0; i < 5; i++ {
+		w := GenerateRandomString(rand.Intn(15) + 5)
+		c := rune(w[rand.Intn(len(w))])
+		if rand.Intn(2) == 0 { c = rune(rand.Intn(26) + 'a') }
+		Compare(solution.CountChar(w,c), student.CountChar(w,c), fmt.Sprintf("CountChar(\"%s\",'%c') (random)", w, c))
+	}
+	Compare(solution.CountChar("",  'a'), student.CountChar("",  'a'), "CountChar(\"\", 'a')")
+	Success()
+}

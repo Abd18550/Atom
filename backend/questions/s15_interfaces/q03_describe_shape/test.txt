@@ -1,0 +1,14 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		side := rand.Intn(30)+1
+		sq := student.NewSquare(side)
+		expected := fmt.Sprintf("This shape has area: %d", side*side)
+		Compare(expected, student.DescribeShape(sq), fmt.Sprintf("DescribeShape(Square{%d})", side))
+	}
+	sq := student.NewSquare(1)
+	Compare("This shape has area: 1", student.DescribeShape(sq), "DescribeShape(Square{1})")
+	Success()
+}

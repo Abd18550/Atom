@@ -1,0 +1,28 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt";"strconv")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 6; i++ {
+		n := rand.Intn(200)+1
+		s := strconv.Itoa(n)
+		sVal, sErr := solution.ParsePositive(s)
+		uVal, uErr := student.ParsePositive(s)
+		Compare(sVal, uVal, fmt.Sprintf("ParsePositive(\"%s\") value", s))
+		Compare(sErr, uErr, fmt.Sprintf("ParsePositive(\"%s\") error", s))
+	}
+	negatives := []string{"-1","-10","-99","0"}
+	for _, s := range negatives {
+		sVal, sErr := solution.ParsePositive(s)
+		uVal, uErr := student.ParsePositive(s)
+		Compare(sVal, uVal, fmt.Sprintf("ParsePositive(\"%s\") value", s))
+		Compare(sErr, uErr, fmt.Sprintf("ParsePositive(\"%s\") error", s))
+	}
+	invalids := []string{"abc","hello","12x","","  "}
+	for _, s := range invalids {
+		sVal, sErr := solution.ParsePositive(s)
+		uVal, uErr := student.ParsePositive(s)
+		Compare(sVal, uVal, fmt.Sprintf("ParsePositive(\"%s\") value", s))
+		Compare(sErr, uErr, fmt.Sprintf("ParsePositive(\"%s\") error", s))
+	}
+	Success()
+}

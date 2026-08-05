@@ -1,0 +1,39 @@
+package main
+import ("os/exec"; "strings"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	pool := []string{"alpha","bravo","charlie","delta","echo","foxtrot","golf","hotel","india","juliet"}
+	for i := 0; i < 6; i++ {
+		n := rand.Intn(4)+2
+		args := []string{"run", "student/main.go"}
+		words := make([]string, n)
+		for j := 0; j < n; j++ {
+			w := pool[rand.Intn(len(pool))]
+			args = append(args, w)
+			words[j] = w
+		}
+		reversed := make([]string, n)
+		for j := 0; j < n; j++ { reversed[j] = words[n-1-j] }
+		out, _ := exec.Command("go", args...).Output()
+		expected := strings.Join(reversed, "\n")
+		Compare(expected, strings.TrimSpace(string(out)), fmt.Sprintf("Reverse %v", words))
+	}
+	for i := 0; i < 4; i++ {
+		n := rand.Intn(4)+2
+		args := []string{"run", "student/main.go"}
+		words := make([]string, n)
+		for j := 0; j < n; j++ {
+			w := GenerateRandomString(rand.Intn(8)+2)
+			args = append(args, w)
+			words[j] = w
+		}
+		reversed := make([]string, n)
+		for j := 0; j < n; j++ { reversed[j] = words[n-1-j] }
+		out, _ := exec.Command("go", args...).Output()
+		expected := strings.Join(reversed, "\n")
+		Compare(expected, strings.TrimSpace(string(out)), fmt.Sprintf("Reverse %v (random)", words))
+	}
+	out, _ := exec.Command("go", "run", "student/main.go", "only").Output()
+	Compare("only", strings.TrimSpace(string(out)), "Single arg")
+	Success()
+}

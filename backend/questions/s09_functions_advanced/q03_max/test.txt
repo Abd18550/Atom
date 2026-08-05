@@ -1,0 +1,17 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		l := rand.Intn(6)+1
+		arr := make([]int, l)
+		for j := 0; j < l; j++ { arr[j] = rand.Intn(200)-100 }
+		Compare(solution.Max(arr...), student.Max(arr...), fmt.Sprintf("Max(%v...)", arr))
+	}
+	Compare(solution.Max(7,7,7), student.Max(7,7,7), "Max(7,7,7)")
+	Compare(solution.Max(-1,-2,-3), student.Max(-1,-2,-3), "Max(-1,-2,-3)")
+	Compare(solution.Max(0), student.Max(0), "Max(0)")
+	Compare(solution.Max(100), student.Max(100), "Max(100)")
+	Compare(solution.Max(1,2,3,4,5,6,7,8,9,10), student.Max(1,2,3,4,5,6,7,8,9,10), "Max(1..10)")
+	Success()
+}

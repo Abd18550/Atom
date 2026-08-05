@@ -1,0 +1,17 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	pool := []string{"hello","world","ABC","Go","test","xyz","OpenAI","Atom","code","fun","12345"}
+	for i := 0; i < 8; i++ {
+		w := pool[rand.Intn(len(pool))]
+		Compare(solution.SumASCII(w), student.SumASCII(w), fmt.Sprintf("SumASCII(\"%s\")", w))
+	}
+	for i := 0; i < 5; i++ {
+		w := GenerateRandomString(rand.Intn(15) + 3)
+		Compare(solution.SumASCII(w), student.SumASCII(w), fmt.Sprintf("SumASCII(\"%s\") (random)", w))
+	}
+	Compare(solution.SumASCII("a"), student.SumASCII("a"), "SumASCII(\"a\")")
+	Compare(solution.SumASCII(""), student.SumASCII(""), "SumASCII(\"\")")
+	Success()
+}

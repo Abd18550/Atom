@@ -1,0 +1,20 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	words := []string{"abc","xyz","hello","world","golang","test","code","atom","cipher","secret","message","alpha"}
+	for i := 0; i < 10; i++ {
+		w := words[rand.Intn(len(words))]
+		shift := rand.Intn(26)
+		Compare(solution.CaesarCipher(w, shift), student.CaesarCipher(w, shift), fmt.Sprintf("CaesarCipher(\"%s\", %d)", w, shift))
+	}
+	for i := 0; i < 5; i++ {
+		w := GenerateRandomString(rand.Intn(20)+5)
+		shift := rand.Intn(50)
+		Compare(solution.CaesarCipher(w, shift), student.CaesarCipher(w, shift), fmt.Sprintf("CaesarCipher(\"%s\", %d) (random)", w, shift))
+	}
+	Compare(solution.CaesarCipher("abc", 0), student.CaesarCipher("abc", 0), "CaesarCipher(\"abc\", 0)")
+	Compare(solution.CaesarCipher("zzz", 1), student.CaesarCipher("zzz", 1), "CaesarCipher(\"zzz\", 1)")
+	Compare(solution.CaesarCipher("abc", 26), student.CaesarCipher("abc", 26), "CaesarCipher(\"abc\", 26)")
+	Success()
+}

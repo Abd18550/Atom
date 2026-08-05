@@ -1,0 +1,2 @@
+package solution
+func CountChar(s string, target rune) int { c:=0; for _,r:=range s{if r==target{c++}}; return c }

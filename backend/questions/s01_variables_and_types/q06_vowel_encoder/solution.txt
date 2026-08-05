@@ -1,0 +1,11 @@
+package solution
+func EncodeVowel(letter rune) rune {
+	switch letter {
+	case 'a': return '@'
+	case 'e': return '&'
+	case 'i': return '!'
+	case 'o': return '0'
+	case 'u': return '^'
+	default: return letter
+	}
+}

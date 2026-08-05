@@ -1,0 +1,15 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		origA, origB := rand.Intn(200)-100, rand.Intn(200)-100
+		a, b := origA, origB
+		student.SwapValues(&a, &b)
+		Compare(origB, a, fmt.Sprintf("SwapValues(&%d, &%d) -> a", origA, origB))
+		Compare(origA, b, fmt.Sprintf("SwapValues(&%d, &%d) -> b", origA, origB))
+	}
+	a, b := 0, 0; student.SwapValues(&a, &b)
+	Compare(0, a, "SwapValues(&0,&0) a"); Compare(0, b, "SwapValues(&0,&0) b")
+	Success()
+}

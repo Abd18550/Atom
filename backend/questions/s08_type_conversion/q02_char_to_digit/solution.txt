@@ -1,0 +1,2 @@
+package solution
+func CharToDigit(c rune) int { return int(c - '0') }

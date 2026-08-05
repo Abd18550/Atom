@@ -1,0 +1,14 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		t := rand.Intn(200)-100
+		x := t
+		student.DoubleValue(&x)
+		Compare(t*2, x, fmt.Sprintf("DoubleValue(&%d)", t))
+	}
+	x := 0; student.DoubleValue(&x); Compare(0, x, "DoubleValue(&0)")
+	y := -1; student.DoubleValue(&y); Compare(-2, y, "DoubleValue(&-1)")
+	Success()
+}

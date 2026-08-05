@@ -1,0 +1,21 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	names := []string{"Alex","Sarah","John","Omar","Lina","Ali","Dana","Yusuf","Noor","Sami"}
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		n := names[rand.Intn(len(names))]
+		a := rand.Intn(60) + 10
+		p := student.NewPerson(n, a)
+		Compare(n, p.Name, fmt.Sprintf("NewPerson('%s', %d).Name", n, a))
+		Compare(a, p.Age, fmt.Sprintf("NewPerson('%s', %d).Age", n, a))
+	}
+	for i := 0; i < 5; i++ {
+		n := GenerateRandomString(rand.Intn(10) + 3)
+		a := rand.Intn(100) + 1
+		p := student.NewPerson(n, a)
+		Compare(n, p.Name, fmt.Sprintf("NewPerson('%s', %d).Name (random)", n, a))
+		Compare(a, p.Age, fmt.Sprintf("NewPerson('%s', %d).Age (random)", n, a))
+	}
+	Success()
+}

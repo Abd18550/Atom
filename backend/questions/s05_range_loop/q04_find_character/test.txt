@@ -1,0 +1,21 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	words := []string{"hello","world","golang","programming","test","abcdef","xyz"}
+	chars := []rune{'a','e','o','g','z','x','t','m','p','b'}
+	for i := 0; i < 10; i++ {
+		w := words[rand.Intn(len(words))]
+		c := chars[rand.Intn(len(chars))]
+		Compare(solution.FindCharIndex(w, c), student.FindCharIndex(w, c), fmt.Sprintf("FindCharIndex(\"%s\", '%c')", w, c))
+	}
+	for i := 0; i < 5; i++ {
+		w := GenerateRandomString(rand.Intn(15) + 5)
+		c := rune(w[rand.Intn(len(w))])
+		if rand.Intn(2) == 0 { c = rune(rand.Intn(26) + 'A') }
+		Compare(solution.FindCharIndex(w, c), student.FindCharIndex(w, c), fmt.Sprintf("FindCharIndex(\"%s\", '%c') (random)", w, c))
+	}
+	Compare(solution.FindCharIndex("hello", 'h'), student.FindCharIndex("hello", 'h'), "FindCharIndex(\"hello\", 'h')")
+	Compare(solution.FindCharIndex("test", 'z'), student.FindCharIndex("test", 'z'), "FindCharIndex(\"test\", 'z')")
+	Success()
+}

@@ -1,0 +1,15 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		l := rand.Intn(6)+1
+		arr := make([]int, l)
+		for j := 0; j < l; j++ { arr[j] = rand.Intn(100)-50 }
+		Compare(solution.SumAll(arr...), student.SumAll(arr...), fmt.Sprintf("SumAll(%v...)", arr))
+	}
+	Compare(solution.SumAll(), student.SumAll(), "SumAll()")
+	Compare(solution.SumAll(0), student.SumAll(0), "SumAll(0)")
+	Compare(solution.SumAll(-5,5), student.SumAll(-5,5), "SumAll(-5,5)")
+	Success()
+}

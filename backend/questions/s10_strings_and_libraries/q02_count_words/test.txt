@@ -1,0 +1,24 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt";"strings")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	words := []string{"hello","world","go","is","great","I","love","coding","this","fun","atom","platform"}
+	for i := 0; i < 8; i++ {
+		n := rand.Intn(5)+1
+		parts := make([]string, n)
+		for j := 0; j < n; j++ { parts[j] = words[rand.Intn(len(words))] }
+		sentence := strings.Join(parts, " ")
+		Compare(solution.CountWords(sentence), student.CountWords(sentence), fmt.Sprintf("CountWords(\"%s\")", sentence))
+	}
+	for i := 0; i < 5; i++ {
+		n := rand.Intn(5)+1
+		parts := make([]string, n)
+		for j := 0; j < n; j++ { parts[j] = GenerateRandomString(rand.Intn(8) + 2) }
+		sentence := strings.Join(parts, " ")
+		Compare(solution.CountWords(sentence), student.CountWords(sentence), fmt.Sprintf("CountWords(\"%s\") (random)", sentence))
+	}
+	Compare(solution.CountWords(""), student.CountWords(""), "CountWords(\"\")")
+	Compare(solution.CountWords("one"), student.CountWords("one"), "CountWords(\"one\")")
+	Compare(solution.CountWords("  spaces  everywhere  "), student.CountWords("  spaces  everywhere  "), "CountWords with extra spaces")
+	Success()
+}

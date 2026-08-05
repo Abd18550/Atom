@@ -1,0 +1,3 @@
+package solution
+import "strings"
+func ContainsIgnoreCase(s, sub string) bool { return strings.Contains(strings.ToLower(s), strings.ToLower(sub)) }

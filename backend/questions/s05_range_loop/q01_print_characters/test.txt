@@ -1,0 +1,56 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"math/rand"
+	"os"
+	"strings"
+	"time"
+
+	"sandbox/solution"
+	"sandbox/student"
+)
+
+func captureOutput(f func()) string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	f()
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	return strings.TrimSpace(buf.String())
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+
+	meaningfulTests := []string{
+		"Go!",
+		"Hello World",
+		"Programming in Go",
+		"Atom",
+		"12345",
+	}
+
+	for _, w := range meaningfulTests {
+		expected := captureOutput(func() { solution.PrintCharacters(w) })
+		actual := captureOutput(func() { student.PrintCharacters(w) })
+		Compare(expected, actual, fmt.Sprintf("PrintCharacters(%q)", w))
+	}
+
+	for i := 0; i < 5; i++ {
+		w := GenerateRandomString(rand.Intn(15) + 5)
+		expected := captureOutput(func() { solution.PrintCharacters(w) })
+		actual := captureOutput(func() { student.PrintCharacters(w) })
+		Compare(expected, actual, fmt.Sprintf("PrintCharacters(%q) (random)", w))
+	}
+
+	Success()
+}

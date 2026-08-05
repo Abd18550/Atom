@@ -1,0 +1,2 @@
+package solution
+func SumASCII(s string) int { sVal:=0; for _, c := range s { sVal += int(c) }; return sVal }

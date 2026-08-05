@@ -1,0 +1,3 @@
+package solution
+import "strings"
+func ReverseWords(s string) string { w:=strings.Fields(s); for i,j:=0,len(w)-1; i<j; i,j=i+1,j-1 { w[i],w[j]=w[j],w[i] }; return strings.Join(w, " ") }

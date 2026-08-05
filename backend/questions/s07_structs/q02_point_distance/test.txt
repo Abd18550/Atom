@@ -1,0 +1,16 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+type Point struct{ X,Y int }
+func solutionDist(p1,p2 Point) int { return (p1.X-p2.X)*(p1.X-p2.X) + (p1.Y-p2.Y)*(p1.Y-p2.Y)}
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		x1,y1 := rand.Intn(40)-20, rand.Intn(40)-20
+		x2,y2 := rand.Intn(40)-20, rand.Intn(40)-20
+		p1, p2 := student.Point{X:x1,Y:y1}, student.Point{X:x2,Y:y2}
+		s1, s2 := Point{x1,y1}, Point{x2,y2}
+		Compare(solutionDist(s1,s2), student.DistanceSquared(p1,p2), fmt.Sprintf("DistanceSquared({%d,%d}, {%d,%d})", x1,y1,x2,y2))
+	}
+	Compare(solutionDist(Point{0,0},Point{0,0}), student.DistanceSquared(student.Point{X:0,Y:0},student.Point{X:0,Y:0}), "DistanceSquared({0,0},{0,0})")
+	Success()
+}

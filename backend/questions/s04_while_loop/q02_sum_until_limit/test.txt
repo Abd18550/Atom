@@ -1,0 +1,12 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		l := rand.Intn(100) + 3
+		Compare(solution.SumUntil(l), student.SumUntil(l), fmt.Sprintf("SumUntil(%d)", l))
+	}
+	Compare(solution.SumUntil(1), student.SumUntil(1), "SumUntil(1)")
+	Compare(solution.SumUntil(0), student.SumUntil(0), "SumUntil(0)")
+	Success()
+}

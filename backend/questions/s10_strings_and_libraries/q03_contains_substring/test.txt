@@ -1,0 +1,24 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	strs := []string{"Hello World","Go Programming","Atom Platform","Test Case","ABCDEF","coding fun","Learn Go Today"}
+	subs := []string{"hello","go","atom","test","cde","FUN","xyz","learn","today","missing","prog"}
+	for i := 0; i < 10; i++ {
+		s := strs[rand.Intn(len(strs))]
+		sub := subs[rand.Intn(len(subs))]
+		Compare(solution.ContainsIgnoreCase(s,sub), student.ContainsIgnoreCase(s,sub), fmt.Sprintf("ContainsIgnoreCase(\"%s\",\"%s\")", s, sub))
+	}
+	for i := 0; i < 5; i++ {
+		s := GenerateRandomString(rand.Intn(20) + 10)
+		sub := GenerateRandomString(rand.Intn(5) + 3)
+		if rand.Intn(2) == 0 {
+			start := rand.Intn(len(s) - len(sub))
+			sub = s[start : start+len(sub)]
+		}
+		Compare(solution.ContainsIgnoreCase(s,sub), student.ContainsIgnoreCase(s,sub), fmt.Sprintf("ContainsIgnoreCase(\"%s\",\"%s\") (random)", s, sub))
+	}
+	Compare(solution.ContainsIgnoreCase("","anything"), student.ContainsIgnoreCase("","anything"), "empty string test")
+	Compare(solution.ContainsIgnoreCase("test",""), student.ContainsIgnoreCase("test",""), "empty substring test")
+	Success()
+}

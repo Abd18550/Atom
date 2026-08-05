@@ -1,0 +1,13 @@
+package main
+import ("sandbox/student"; "sandbox/solution"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		val := rand.Intn(200)-100
+		Compare(solution.CheckSign(val), student.CheckSign(val), fmt.Sprintf("CheckSign(%d)", val))
+	}
+	Compare(solution.CheckSign(0), student.CheckSign(0), "CheckSign(0)")
+	Compare(solution.CheckSign(1), student.CheckSign(1), "CheckSign(1)")
+	Compare(solution.CheckSign(-1), student.CheckSign(-1), "CheckSign(-1)")
+	Success()
+}

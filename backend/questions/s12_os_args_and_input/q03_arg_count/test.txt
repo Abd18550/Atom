@@ -1,0 +1,21 @@
+package main
+import ("os/exec"; "strings"; "math/rand"; "time"; "fmt"; "strconv")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	pool := []string{"a","b","c","d","e","f","hello","world","go","test"}
+	for i := 0; i < 6; i++ {
+		n := rand.Intn(6)
+		args := []string{"run", "student/main.go"}
+		for j := 0; j < n; j++ { args = append(args, pool[rand.Intn(len(pool))]) }
+		out, _ := exec.Command("go", args...).Output()
+		Compare(strconv.Itoa(n), strings.TrimSpace(string(out)), fmt.Sprintf("Arg count with %d args", n))
+	}
+	for i := 0; i < 4; i++ {
+		n := rand.Intn(6)
+		args := []string{"run", "student/main.go"}
+		for j := 0; j < n; j++ { args = append(args, GenerateRandomString(rand.Intn(8)+2)) }
+		out, _ := exec.Command("go", args...).Output()
+		Compare(strconv.Itoa(n), strings.TrimSpace(string(out)), fmt.Sprintf("Arg count with %d random args", n))
+	}
+	Success()
+}

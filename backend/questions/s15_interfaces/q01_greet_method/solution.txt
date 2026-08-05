@@ -1,0 +1,4 @@
+package solution
+type Car struct{ Brand string }
+func (c Car) Greet() string { return "Vroom! I'm a " + c.Brand }
+func NewCar(brand string) Car { return Car{Brand: brand} }

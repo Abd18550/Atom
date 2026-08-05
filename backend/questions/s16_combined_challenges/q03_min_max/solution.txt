@@ -1,0 +1,2 @@
+package solution
+func FindMinMax(a []int) (int,int) { min,max:=a[0],a[0]; for _,v:=range a {if v<min{min=v}; if v>max{max=v}}; return min,max }

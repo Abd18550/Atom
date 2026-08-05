@@ -1,0 +1,14 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		l := rand.Intn(8)+1
+		arr := make([]int, l)
+		for j := 0; j < l; j++ { arr[j] = rand.Intn(20) }
+		tgt := rand.Intn(20)
+		Compare(solution.Contains(arr, tgt), student.Contains(arr, tgt), fmt.Sprintf("Contains(%v, %d)", arr, tgt))
+	}
+	Compare(solution.Contains([]int{}, 1), student.Contains([]int{}, 1), "Contains([], 1)")
+	Success()
+}

@@ -1,0 +1,2 @@
+package solution
+func SumAll(nums ...int) int { s:=0; for _,v:=range nums{s+=v}; return s }

@@ -1,0 +1,19 @@
+package main
+import ("os/exec"; "strings"; "math/rand"; "time"; "fmt"; "strconv")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 6; i++ {
+		n := rand.Intn(4)+2
+		args := make([]string, n)
+		sum := 0
+		for j := 0; j < n; j++ {
+			v := rand.Intn(100)
+			args[j] = strconv.Itoa(v)
+			sum += v
+		}
+		cmdArgs := append([]string{"run", "student/main.go"}, args...)
+		out, _ := exec.Command("go", cmdArgs...).Output()
+		Compare(strconv.Itoa(sum), strings.TrimSpace(string(out)), fmt.Sprintf("Sum of %v", args))
+	}
+	Success()
+}

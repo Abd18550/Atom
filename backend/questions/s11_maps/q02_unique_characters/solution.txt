@@ -1,0 +1,2 @@
+package solution
+func UniqueCount(s string) int { m:=make(map[rune]bool); for _,c:=range s{m[c]=true}; return len(m) }

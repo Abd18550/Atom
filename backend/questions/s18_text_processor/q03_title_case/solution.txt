@@ -1,0 +1,3 @@
+package solution
+import ("strings")
+func TitleCase(s string) string { words:=strings.Fields(s); for i,w:=range words { if len(w)>0 { words[i]=strings.ToUpper(string(w[0]))+w[1:] } }; return strings.Join(words, " ") }

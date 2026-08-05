@@ -1,0 +1,2 @@
+package solution
+func CaesarCipher(s string, shift int) string { r:=[]rune(s); for i,c:=range r { if c>='a'&&c<='z' { r[i]=rune((int(c-'a')+shift)%26)+'a' } }; return string(r) }

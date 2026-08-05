@@ -1,0 +1,17 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	words := []string{"hello","apple","rhythm","education","elephant","xyz","programming","aeiou","golang","test","beautiful","queue","strength","orange"}
+	for i := 0; i < 10; i++ {
+		n := words[rand.Intn(len(words))]
+		Compare(solution.CountVowels(n), student.CountVowels(n), fmt.Sprintf("CountVowels(\"%s\")", n))
+	}
+	for i := 0; i < 5; i++ {
+		n := GenerateRandomString(rand.Intn(20)+5)
+		Compare(solution.CountVowels(n), student.CountVowels(n), fmt.Sprintf("CountVowels(\"%s\") (random)", n))
+	}
+	Compare(solution.CountVowels(""), student.CountVowels(""), "CountVowels(\"\")")
+	Compare(solution.CountVowels("bcdfg"), student.CountVowels("bcdfg"), "CountVowels(\"bcdfg\")")
+	Success()
+}

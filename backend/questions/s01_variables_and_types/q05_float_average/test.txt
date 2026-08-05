@@ -1,0 +1,15 @@
+package main
+import ("sandbox/student"; "sandbox/solution"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		a := float64(rand.Intn(200)-100) + rand.Float64()
+		b := float64(rand.Intn(200)-100) + rand.Float64()
+		a = float64(int(a*100)) / 100
+		b = float64(int(b*100)) / 100
+		Compare(solution.Average(a, b), student.Average(a, b), fmt.Sprintf("Average(%.2f, %.2f)", a, b))
+	}
+	Compare(solution.Average(0.0, 0.0), student.Average(0.0, 0.0), "Average(0.0, 0.0)")
+	Compare(solution.Average(-5.0, 5.0), student.Average(-5.0, 5.0), "Average(-5.0, 5.0)")
+	Success()
+}

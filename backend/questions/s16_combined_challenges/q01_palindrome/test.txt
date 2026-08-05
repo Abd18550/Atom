@@ -1,0 +1,22 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	words := []string{"racecar","hello","madam","test","kayak","world","level","noon","civic","radar","apple","refer","rotor","deified","banana"}
+	for i := 0; i < 10; i++ {
+		n := words[rand.Intn(len(words))]
+		Compare(solution.IsPalindrome(n), student.IsPalindrome(n), fmt.Sprintf("IsPalindrome(\"%s\")", n))
+	}
+	for i := 0; i < 5; i++ {
+		n := GenerateRandomString(rand.Intn(10)+2)
+		if rand.Intn(2) == 0 {
+			r := []rune(n)
+			for j, k := 0, len(r)-1; j < k; j, k = j+1, k-1 { r[k] = r[j] }
+			n = string(r)
+		}
+		Compare(solution.IsPalindrome(n), student.IsPalindrome(n), fmt.Sprintf("IsPalindrome(\"%s\") (random)", n))
+	}
+	Compare(solution.IsPalindrome("a"), student.IsPalindrome("a"), "IsPalindrome(\"a\")")
+	Compare(solution.IsPalindrome(""), student.IsPalindrome(""), "IsPalindrome(\"\")")
+	Success()
+}

@@ -1,0 +1,2 @@
+package solution
+func Max(nums ...int) int { m:=nums[0]; for _,v:=range nums[1:]{if v>m{m=v}}; return m }

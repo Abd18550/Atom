@@ -1,0 +1,19 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		l := rand.Intn(8)+1
+		arr := make([]int, l)
+		for j := 0; j < l; j++ { arr[j] = rand.Intn(200)-100 }
+		sMin, sMax := solution.FindMinMax(arr)
+		uMin, uMax := student.FindMinMax(arr)
+		Compare(sMin, uMin, fmt.Sprintf("FindMinMax(%v) Min", arr))
+		Compare(sMax, uMax, fmt.Sprintf("FindMinMax(%v) Max", arr))
+	}
+	sMin, sMax := solution.FindMinMax([]int{5})
+	uMin, uMax := student.FindMinMax([]int{5})
+	Compare(sMin, uMin, "FindMinMax([5]) Min")
+	Compare(sMax, uMax, "FindMinMax([5]) Max")
+	Success()
+}

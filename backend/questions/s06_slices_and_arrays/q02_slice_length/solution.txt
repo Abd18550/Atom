@@ -1,0 +1,2 @@
+package solution
+func SliceLength(arr []int) int { return len(arr) }

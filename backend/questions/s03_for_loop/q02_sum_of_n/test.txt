@@ -1,0 +1,12 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		n := rand.Intn(100) + 1
+		Compare(solution.Sum(n), student.Sum(n), fmt.Sprintf("Sum(%d)", n))
+	}
+	Compare(solution.Sum(1), student.Sum(1), "Sum(1)")
+	Compare(solution.Sum(0), student.Sum(0), "Sum(0)")
+	Success()
+}

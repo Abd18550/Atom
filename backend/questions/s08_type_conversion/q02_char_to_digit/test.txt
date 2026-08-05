@@ -1,0 +1,12 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	digits := []rune("0123456789")
+	order := rand.Perm(10)
+	for _, i := range order {
+		c := digits[i]
+		Compare(solution.CharToDigit(c), student.CharToDigit(c), fmt.Sprintf("CharToDigit('%c')", c))
+	}
+	Success()
+}

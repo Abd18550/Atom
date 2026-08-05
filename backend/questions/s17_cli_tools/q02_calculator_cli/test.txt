@@ -1,0 +1,16 @@
+package main
+import ("os/exec"; "strings"; "math/rand"; "time"; "fmt"; "strconv")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	ops := []string{"+", "-", "*"}
+	for i := 0; i < 8; i++ {
+		a := rand.Intn(50)+1
+		b := rand.Intn(50)+1
+		op := ops[rand.Intn(len(ops))]
+		var expected int
+		switch op { case "+": expected=a+b; case "-": expected=a-b; case "*": expected=a*b }
+		out, _ := exec.Command("go", "run", "student/main.go", strconv.Itoa(a), op, strconv.Itoa(b)).Output()
+		Compare(strconv.Itoa(expected), strings.TrimSpace(string(out)), fmt.Sprintf("%d %s %d", a, op, b))
+	}
+	Success()
+}

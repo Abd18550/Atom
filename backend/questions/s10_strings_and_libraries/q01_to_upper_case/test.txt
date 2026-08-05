@@ -1,0 +1,17 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	pool := []string{"hello","Go","WORLD","test123","abc","Mixed","coding","atom","Platform","learn","xYz","FuN"}
+	for i := 0; i < 8; i++ {
+		w := pool[rand.Intn(len(pool))]
+		Compare(solution.ToUpperCase(w), student.ToUpperCase(w), fmt.Sprintf("ToUpperCase(\"%s\")", w))
+	}
+	for i := 0; i < 5; i++ {
+		w := GenerateRandomString(rand.Intn(15) + 3)
+		Compare(solution.ToUpperCase(w), student.ToUpperCase(w), fmt.Sprintf("ToUpperCase(\"%s\") (random)", w))
+	}
+	Compare(solution.ToUpperCase(""), student.ToUpperCase(""), "ToUpperCase(\"\")")
+	Compare(solution.ToUpperCase("ABC"), student.ToUpperCase("ABC"), "ToUpperCase(\"ABC\")")
+	Success()
+}

@@ -1,0 +1,15 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		a, b := rand.Intn(200)-100, rand.Intn(200)-100
+		sa, sb := solution.Swap(a, b)
+		ua, ub := student.Swap(a, b)
+		Compare(sa, ua, fmt.Sprintf("Swap(%d, %d) first", a, b))
+		Compare(sb, ub, fmt.Sprintf("Swap(%d, %d) second", a, b))
+	}
+	sa, sb := solution.Swap(0, 0); ua, ub := student.Swap(0, 0)
+	Compare(sa, ua, "Swap(0,0) first"); Compare(sb, ub, "Swap(0,0) second")
+	Success()
+}

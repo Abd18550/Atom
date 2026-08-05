@@ -1,0 +1,2 @@
+package solution
+func DigitToChar(n int) string { return string(rune(n + '0')) }

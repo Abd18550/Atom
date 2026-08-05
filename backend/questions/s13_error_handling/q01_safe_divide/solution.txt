@@ -1,0 +1,2 @@
+package solution
+func SafeDivide(a, b int) (int, string) { if b==0 {return 0, "division by zero"}; return a/b, "" }

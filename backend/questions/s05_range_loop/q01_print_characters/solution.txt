@@ -1,0 +1,3 @@
+package solution
+import "fmt"
+func PrintCharacters(word string) { for _, c := range word { fmt.Println(string(c)) } }

@@ -1,0 +1,5 @@
+package solution
+type Shape interface { Area() int }
+type Square struct{ Side int }
+func (s Square) Area() int { return s.Side * s.Side }
+func NewSquare(side int) Square { return Square{Side: side} }

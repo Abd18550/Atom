@@ -1,0 +1,13 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		n := rand.Intn(500) + 1
+		Compare(solution.CountDivisions(n), student.CountDivisions(n), fmt.Sprintf("CountDivisions(%d)", n))
+	}
+	Compare(solution.CountDivisions(0), student.CountDivisions(0), "CountDivisions(0)")
+	Compare(solution.CountDivisions(1), student.CountDivisions(1), "CountDivisions(1)")
+	Compare(solution.CountDivisions(1024), student.CountDivisions(1024), "CountDivisions(1024)")
+	Success()
+}

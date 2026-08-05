@@ -1,0 +1,20 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	brands := []string{"Toyota","BMW","Tesla","Honda","Ford","Kia","Audi","Mazda","Nissan","Hyundai","Mercedes","Porsche"}
+	for i := 0; i < 8; i++ {
+		b := brands[rand.Intn(len(brands))]
+		c := student.NewCar(b)
+		expected := "Vroom! I'm a " + b
+		Compare(expected, c.Greet(), fmt.Sprintf("NewCar(\"%s\").Greet()", b))
+	}
+	for i := 0; i < 4; i++ {
+		b := GenerateRandomString(rand.Intn(10)+4)
+		c := student.NewCar(b)
+		expected := "Vroom! I'm a " + b
+		Compare(expected, c.Greet(), fmt.Sprintf("NewCar(\"%s\").Greet() (random)", b))
+	}
+	c := student.NewCar("Go"); Compare("Vroom! I'm a Go", c.Greet(), "NewCar(\"Go\").Greet()")
+	Success()
+}

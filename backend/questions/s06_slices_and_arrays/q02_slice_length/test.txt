@@ -1,0 +1,14 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		l := rand.Intn(20)
+		arr := make([]int, l)
+		for j := 0; j < l; j++ { arr[j] = rand.Intn(100) }
+		Compare(solution.SliceLength(arr), student.SliceLength(arr), fmt.Sprintf("SliceLength(%v)", arr))
+	}
+	Compare(solution.SliceLength([]int{}), student.SliceLength([]int{}), "SliceLength([])")
+	Compare(solution.SliceLength([]int{1}), student.SliceLength([]int{1}), "SliceLength([1])")
+	Success()
+}

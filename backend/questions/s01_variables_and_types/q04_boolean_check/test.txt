@@ -1,0 +1,13 @@
+package main
+import ("sandbox/student"; "sandbox/solution"; "math/rand"; "time"; "fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		n := rand.Intn(200) - 100
+		Compare(solution.IsEven(n), student.IsEven(n), fmt.Sprintf("IsEven(%d)", n))
+	}
+	Compare(solution.IsEven(0), student.IsEven(0), "IsEven(0)")
+	Compare(solution.IsEven(1), student.IsEven(1), "IsEven(1)")
+	Compare(solution.IsEven(-2), student.IsEven(-2), "IsEven(-2)")
+	Success()
+}

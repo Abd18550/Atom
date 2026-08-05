@@ -1,0 +1,2 @@
+package solution
+func NewInt(val int) *int { return &val }

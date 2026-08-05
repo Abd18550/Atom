@@ -1,0 +1,2 @@
+package solution
+func Reverse(a []int) []int { r:=make([]int,len(a)); for i,v:=range a {r[len(a)-1-i]=v}; return r}

@@ -1,0 +1,2 @@
+package solution
+func SwapValues(a, b *int) { *a, *b = *b, *a }

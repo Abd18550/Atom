@@ -1,0 +1,3 @@
+package solution
+type Person struct{ Name string; Age int }
+func NewPerson(n string, a int) Person { return Person{n,a} }

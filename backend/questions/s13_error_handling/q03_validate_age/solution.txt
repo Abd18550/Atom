@@ -1,0 +1,2 @@
+package solution
+func ValidateAge(age int) string { if age < 0 {return "age cannot be negative"}; if age > 150 {return "age too large"}; return "" }

@@ -1,0 +1,3 @@
+package solution
+import "fmt"
+func DescribeShape(s Shape) string { return fmt.Sprintf("This shape has area: %d", s.Area()) }

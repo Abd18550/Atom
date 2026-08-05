@@ -1,0 +1,13 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		n := rand.Intn(999999) + 1
+		Compare(solution.CountDigits(n), student.CountDigits(n), fmt.Sprintf("CountDigits(%d)", n))
+	}
+	Compare(solution.CountDigits(0), student.CountDigits(0), "CountDigits(0)")
+	Compare(solution.CountDigits(9), student.CountDigits(9), "CountDigits(9)")
+	Compare(solution.CountDigits(100), student.CountDigits(100), "CountDigits(100)")
+	Success()
+}

@@ -1,0 +1,20 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		age := rand.Intn(151)
+		Compare(solution.ValidateAge(age), student.ValidateAge(age), fmt.Sprintf("ValidateAge(%d)", age))
+	}
+	for i := 0; i < 4; i++ {
+		age := -(rand.Intn(100)+1)
+		Compare(solution.ValidateAge(age), student.ValidateAge(age), fmt.Sprintf("ValidateAge(%d)", age))
+	}
+	for i := 0; i < 4; i++ {
+		age := rand.Intn(100)+151
+		Compare(solution.ValidateAge(age), student.ValidateAge(age), fmt.Sprintf("ValidateAge(%d)", age))
+	}
+	Compare(solution.ValidateAge(0), student.ValidateAge(0), "ValidateAge(0)")
+	Compare(solution.ValidateAge(150), student.ValidateAge(150), "ValidateAge(150)")
+	Success()
+}

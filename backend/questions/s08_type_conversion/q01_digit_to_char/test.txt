@@ -1,0 +1,10 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	order := rand.Perm(10)
+	for _, i := range order {
+		Compare(solution.DigitToChar(i), student.DigitToChar(i), fmt.Sprintf("DigitToChar(%d)", i))
+	}
+	Success()
+}

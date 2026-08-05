@@ -1,0 +1,17 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt";"strconv")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		n := rand.Intn(2000) - 1000
+		Compare(solution.IntToStr(n), student.IntToStr(n), fmt.Sprintf("IntToStr(%d)", n))
+	}
+	for i := 0; i < 8; i++ {
+		n := rand.Intn(2000) - 1000
+		s := strconv.Itoa(n)
+		Compare(solution.StrToInt(s), student.StrToInt(s), fmt.Sprintf("StrToInt(\"%s\")", s))
+	}
+	Compare(solution.IntToStr(0), student.IntToStr(0), "IntToStr(0)")
+	Compare(solution.StrToInt("0"), student.StrToInt("0"), "StrToInt(\"0\")")
+	Success()
+}

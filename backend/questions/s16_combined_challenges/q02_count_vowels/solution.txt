@@ -1,0 +1,2 @@
+package solution
+func CountVowels(s string) int { c:=0; for _,x:=range s{if x=='a'||x=='e'||x=='i'||x=='o'||x=='u'{c++}}; return c }

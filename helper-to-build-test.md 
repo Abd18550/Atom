@@ -1,0 +1,103 @@
+دليل إنشاء التحديات البرمجية (Admin Cheat Sheet)
+يوفر لك هذا الدليل الهياكل الثابتة (Templates) لإنشاء التحديات. القاعدة الذهبية: الأسطر التي ينتهي شرحها بكلمة (ثابت) لا تقم بتغييرها إطلاقاً. الأسطر التي ينتهي شرحها بكلمة (متغير) هي الأسطر التي تغيرها حسب فكرة سؤالك.
+
+1. تحديات الدوال (Function Only) 🧩
+يُستخدم عندما يُطلب من الطالب إكمال دالة (Function) فقط، مثل func Add(a, b int) int.
+
+الحل النموذجي (Expected Solution):
+go
+package solution // (ثابت) يجب أن يكون اسم الحزمة solution
+// (متغير) هنا تكتب الدالة حسب المطلوب من السؤال
+func Multiply(a, b int) int {
+	return a * b
+}
+كود الاختبار الثابت (Test Code):
+انسخ هذا الهيكل دائماً، وعدّل فقط ما بداخل حلقة for حسب عدد ومدخلات سؤالك.
+
+go
+package main // (ثابت)
+import (
+	"fmt" // (متغير) يمكن حذفه إذا لم ترد كتابة رسائل خطأ معقدة للطالب
+	"math/rand" // (متغير) نستخدمها هنا لتوليد أرقام عشوائية
+	"sandbox/solution" // (ثابت) نستدعي به الحل الذي كتبته بالأعلى
+	"sandbox/student" // (ثابت) نستدعي به كود الطالب المخفي
+)
+func main() { // (ثابت)
+    
+	// (متغير) نختبر الدالة بـ 5 أرقام عشوائية
+	for i := 0; i < 5; i++ {
+		x := rand.Intn(100) // (متغير) توليد رقم عشوائي
+		y := rand.Intn(100) // (متغير) توليد رقم عشوائي
+		// (متغير) استدعاء الدالة من كود الطالب وإمرار الأرقام
+		studentAns := student.Multiply(x, y)
+        
+		// (متغير) استدعاء الدالة من كود الحل النموذجي وإمرار نفس الأرقام
+		rightAns := solution.Multiply(x, y)
+		// (متغير) كتابة رسالة توضح للطالب الأرقام التي أخطأ في جمعها
+		msg := fmt.Sprintf("Testing with values: %d and %d", x, y)
+        // (ثابت) المقارنة المركزية
+		Compare(rightAns, studentAns, msg) 
+	}
+    // (ثابت) إعلان النجاح. يجب ألا تحذفه أبداً!
+	Success() 
+}
+2. تحديات البرامج الكاملة (Complete Program) 🖥️
+يُستخدم عندما يُطلب من الطالب كتابة برنامج كامل يحتوي على func main()، مثل برامج طباعة الأشكال أو معالجة المدخلات النصية os.Args.
+
+الحل النموذجي (Expected Solution):
+go
+package main // (ثابت) يجب أن يكون main في هذا النوع
+import (
+	"fmt" // (متغير) استورد ما تحتاجه للحل
+	"os"  // (متغير)
+)
+func main() { // (ثابت)
+	// (متغير) الحل الخاص بك كاملًا
+	for i := 1; i < len(os.Args); i++ {
+		fmt.Print(os.Args[i], " ")
+	}
+	fmt.Println()
+}
+كود الاختبار الثابت (Test Code):
+هذا الهيكل ثابت تقريباً بنسبة 95% لكل أسئلة البرامج. ستقوم فقط بتغيير مصفوفة testCases حسب فكرة سؤالك!
+
+go
+package main // (ثابت)
+import (
+    "fmt" // (متغير) لطباعة الرسالة
+    "os/exec" // (ثابت) مهم جداً لتشغيل برامج الطلاب كأوامر نظام
+    "strings" // (ثابت) لتنظيف الفراغات
+)
+func main() { // (ثابت)
+    
+    // (متغير) هذه المصفوفة هي أهم جزء! ضع فيها المدخلات (الكلمات) التي تريد تمريرها لبرنامج الطالب
+    testCases := [][]string{
+        {"hello"},
+        {"one", "two", "three"},
+        {""}, // اختبار مصفوفة فارغة
+        {"A", "B", "C", "D"},
+    }
+    // (ثابت) من هنا وحتى النهاية لا تحتاج لتغيير شيء تقريباً! سيقوم بالمرور على كل المدخلات السابقة واختبارها
+    for _, args := range testCases {
+        
+        // --- بناء وتشغيل أوامر الحل الصحيح ---
+        cmdExpected := append([]string{"run", "solution/main.go"}, args...)
+        expectedCmd := exec.Command("go", cmdExpected...)
+        expectedBytes, _ := expectedCmd.CombinedOutput()
+        expectedStr := strings.TrimSpace(string(expectedBytes))
+        // --- بناء وتشغيل أوامر الطالب ---
+        cmdStudent := append([]string{"run", "student/main.go"}, args...)
+        studentCmd := exec.Command("go", cmdStudent...)
+        studentBytes, _ := studentCmd.CombinedOutput()
+        studentStr := strings.TrimSpace(string(studentBytes))
+        // (متغير) الرسالة التي ستظهر للطالب بحال طباعته ناتج مختلف
+        msg := fmt.Sprintf("Testing with arguments: %v", args)
+        // (ثابت) المقارنة المركزية
+        Compare(expectedStr, studentStr, msg)
+    }
+    // (ثابت) إعلان النجاح. يجب ألا تحذفه أبداً!
+    Success()
+}
+
+Comment
+Ctrl+Alt+M

@@ -1,0 +1,14 @@
+package main
+import("sandbox/student";"sandbox/solution";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 8; i++ {
+		l := rand.Intn(8)+1
+		arr := make([]int, l)
+		for j := 0; j < l; j++ { arr[j] = rand.Intn(50) }
+		Compare(solution.Reverse(arr), student.Reverse(arr), fmt.Sprintf("Reverse(%v)", arr))
+	}
+	Compare(solution.Reverse([]int{1}), student.Reverse([]int{1}), "Reverse([1])")
+	Compare(solution.Reverse([]int{}), student.Reverse([]int{}), "Reverse([])")
+	Success()
+}

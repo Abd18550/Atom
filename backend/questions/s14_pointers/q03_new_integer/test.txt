@@ -1,0 +1,13 @@
+package main
+import("sandbox/student";"math/rand";"time";"fmt")
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 10; i++ {
+		t := rand.Intn(2000)-1000
+		p := student.NewInt(t)
+		Compare(t, *p, fmt.Sprintf("*NewInt(%d)", t))
+	}
+	p := student.NewInt(0); Compare(0, *p, "*NewInt(0)")
+	q := student.NewInt(-999); Compare(-999, *q, "*NewInt(-999)")
+	Success()
+}

@@ -1,0 +1,184 @@
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
+import { API_BASE_URL } from '../config.js'
+import CodeEditor from '../components/CodeEditor.vue'
+
+const route = useRoute()
+const router = useRouter()
+
+const exercise = ref(null)
+const code = ref("package main\n\nimport \"fmt\"\n\nfunc main() {\n\t// Write your code here\n}\n")
+const loading = ref(true)
+const submitting = ref(false)
+const submissionResult = ref(null)
+
+let pollingInterval = null
+
+onMounted(async () => {
+  try {
+    const token = localStorage.getItem('token')
+    const response = await axios.get(`${API_BASE_URL}/api/exercises/${route.params.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    exercise.value = response.data
+  } catch (err) {
+    console.error("Failed to load exercise", err)
+  } finally {
+    loading.value = false
+  }
+})
+
+onUnmounted(() => {
+  if (pollingInterval) clearInterval(pollingInterval)
+})
+
+const submitCode = async () => {
+  if (!code.value.trim() || submitting.value) return
+  submitting.value = true
+  submissionResult.value = { status: 'Pending', message: 'Submitting to secure sandbox...' }
+
+  try {
+    const token = localStorage.getItem('token')
+    const response = await axios.post(`${API_BASE_URL}/api/submissions`, {
+      exercise_id: exercise.value.id,
+      code: code.value
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+
+    const submissionId = response.data.submission_id
+    startPolling(submissionId)
+
+  } catch (err) {
+    submissionResult.value = { status: 'Error', message: err.response?.data?.error || 'Failed to submit.' }
+    submitting.value = false
+  }
+}
+
+const startPolling = (id) => {
+  pollingInterval = setInterval(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await axios.get(`${API_BASE_URL}/api/submissions/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      const status = res.data.status
+      if (status !== 'Pending' && status !== 'Running') {
+        clearInterval(pollingInterval)
+        submissionResult.value = res.data
+        submitting.value = false
+      } else {
+         submissionResult.value = { ...res.data, message: 'Running in Secure Sandbox...' }
+      }
+    } catch (err) {
+      console.error("Polling error", err)
+      clearInterval(pollingInterval)
+      submitting.value = false
+    }
+  }, 1500)
+}
+</script>
+
+<template>
+  <div v-if="loading" class="text-white animate-pulse">Loading Exercise...</div>
+  
+  <div v-else-if="exercise" class="w-full max-w-7xl h-[80vh] flex flex-col lg:flex-row gap-6 mx-auto">
+    
+    <!-- Left Panel: Description & Results -->
+    <div class="lg:w-1/3 flex flex-col gap-6">
+      
+      <!-- Instructions Card -->
+      <div class="bg-gray-800/80 backdrop-blur rounded-2xl p-6 shadow-xl border border-gray-700/50 flex flex-col flex-grow">
+        <h1 class="text-2xl font-bold text-white mb-2">{{ exercise.title }}</h1>
+        <div class="prose prose-invert prose-indigo max-w-none text-gray-300 whitespace-pre-wrap flex-grow overflow-y-auto">
+          {{ exercise.description }}
+        </div>
+      </div>
+
+      <!-- Results Card (Shows when submitted) -->
+      <div v-if="submissionResult" class="bg-gray-800/80 backdrop-blur rounded-2xl p-6 shadow-xl border border-gray-700/50">
+        <h2 class="text-lg font-bold text-white mb-4">Output Console</h2>
+        
+        <div class="space-y-4">
+          <!-- Status Badge -->
+          <div class="flex items-center space-x-2">
+            <span class="font-semibold text-gray-300">Status:</span>
+            <span :class="{
+              'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider': true,
+              'bg-yellow-500/20 text-yellow-500': submissionResult.status === 'Pending' || submissionResult.status === 'Running',
+              'bg-green-500/20 text-green-500': submissionResult.status === 'Passed',
+              'bg-red-500/20 text-red-500': submissionResult.status === 'Failed' || submissionResult.status === 'SyntaxError' || submissionResult.status === 'Error'
+            }">
+              {{ submissionResult.status }}
+            </span>
+          </div>
+
+          <!-- Pending Message -->
+          <div v-if="submitting" class="text-indigo-400 font-mono text-sm animate-pulse">
+            {{ submissionResult.message }}
+          </div>
+
+          <!-- Syntax / Runtime Error -->
+          <div v-if="submissionResult.status === 'SyntaxError' || submissionResult.status === 'Error'" class="bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-red-400 font-mono text-sm whitespace-pre-wrap overflow-x-auto">
+            {{ submissionResult.error_message || submissionResult.message }}
+          </div>
+
+          <!-- Logic Failure -->
+          <div v-if="submissionResult.status === 'Failed'" class="space-y-3">
+             <div class="text-sm font-semibold text-red-400">Failed on test input: <span class="bg-gray-900 px-2 py-1 rounded">{{ submissionResult.failed_testcase }}</span></div>
+             <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <div class="text-xs text-gray-400 mb-1">Expected Output</div>
+                  <pre class="bg-gray-900 text-green-400 p-2 rounded text-xs border border-gray-700 overflow-x-auto">{{ submissionResult.expected_output }}</pre>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-400 mb-1">Your Output</div>
+                  <pre class="bg-gray-900 text-red-400 p-2 rounded text-xs border border-gray-700 overflow-x-auto">{{ submissionResult.actual_output }}</pre>
+                </div>
+             </div>
+          </div>
+
+          <!-- Success Message -->
+          <div v-if="submissionResult.status === 'Passed'" class="text-green-400 font-mono text-sm">
+            All testcases passed successfully! Great job!
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Code Editor -->
+    <div class="lg:w-2/3 bg-gray-900 rounded-2xl shadow-xl flex flex-col border border-gray-700/50 overflow-hidden">
+      <div class="bg-gray-800 px-4 py-3 flex justify-between items-center border-b border-gray-700/50">
+         <div class="text-gray-300 font-semibold flex items-center gap-2">
+            <svg class="h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            main.go
+         </div>
+         <button 
+          @click="submitCode"
+          :disabled="submitting || !code.trim()"
+          class="flex items-center space-x-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold py-1.5 px-4 rounded-lg shadow-lg transition-all"
+        >
+          <svg v-if="submitting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <svg v-else class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{{ submitting ? 'Running...' : 'Run Code' }}</span>
+        </button>
+      </div>
+      <div class="flex-grow relative overflow-hidden">
+        <CodeEditor v-model="code" />
+      </div>
+    </div>
+
+  </div>
+  <div v-else class="text-red-400">Exercise not found.</div>
+</template>
