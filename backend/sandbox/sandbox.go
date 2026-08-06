@@ -34,16 +34,29 @@ func IsNsjailAvailable() bool {
 	return false
 }
 
-// RunSubmission manages the secure execution and comparison of student code vs right solution.
-// Uses Nsjail engine if available on system, otherwise falls back to hardened Docker container.
+// IsDockerAvailable checks if docker binary exists on system PATH
+func IsDockerAvailable() bool {
+	if _, err := exec.LookPath("docker"); err == nil {
+		return true
+	}
+	return false
+}
+
+// RunSubmission manages execution and comparison of student code vs right solution.
+// Uses Nsjail -> Docker -> Native Go Toolchain fallback (for cloud environments).
 func RunSubmission(studentCode string, rightSolution string, test string) RunResult {
 	if IsNsjailAvailable() {
 		log.Println("Sandbox: Running via Nsjail Engine (High Speed)")
 		return runSubmissionNsjail(studentCode, rightSolution, test)
 	}
 
-	log.Println("Sandbox: Running via Hardened Docker Engine")
-	return runSubmissionDocker(studentCode, rightSolution, test)
+	if IsDockerAvailable() {
+		log.Println("Sandbox: Running via Hardened Docker Engine")
+		return runSubmissionDocker(studentCode, rightSolution, test)
+	}
+
+	log.Println("Sandbox: Running via Native Go Engine (Cloud Fallback)")
+	return runSubmissionNative(studentCode, rightSolution, test)
 }
 
 // runSubmissionNsjail executes code using Nsjail (ultra-fast process isolation)
@@ -291,6 +304,65 @@ func compileGoCodeDocker(dir, filename string) string {
 		"-w", "/app",
 		"golang:1.20-alpine",
 		"go", "build", "-o", "bin", filename)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return strings.TrimSpace(stderr.String())
+	}
+	return ""
+}
+
+// runSubmissionNative executes code natively using host/container Go toolchain
+func runSubmissionNative(studentCode string, rightSolution string, test string) RunResult {
+	tempDir, err := os.MkdirTemp("", "atom-native-*")
+	if err != nil {
+		return RunResult{Passed: false, ErrorMessage: fmt.Sprintf("Failed to create temp directory: %v", err)}
+	}
+	_ = os.Chmod(tempDir, 0777)
+	defer os.RemoveAll(tempDir)
+
+	if err := setupWorkspaceFiles(tempDir, studentCode, rightSolution, test); err != nil {
+		return RunResult{Passed: false, ErrorMessage: err.Error()}
+	}
+
+	// 1. Compile student code to catch syntax errors
+	if errOutput := compileGoCodeNative(tempDir, "student/main.go"); errOutput != "" {
+		return RunResult{Passed: false, ErrorMessage: "Compilation Error:\n" + errOutput}
+	}
+
+	// 2. Run the Unified Test Runner natively
+	timeout := time.Duration(config.AppConfig.SandboxTimeout) * time.Second
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", "run", "test.go", "compare.go")
+	cmd.Dir = tempDir
+	cmd.Env = append(os.Environ(), "GO111MODULE=on")
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+
+	if ctx.Err() == context.DeadlineExceeded {
+		return RunResult{Passed: false, ErrorMessage: fmt.Sprintf("Execution timed out (Max %d seconds limit exceeded).", config.AppConfig.SandboxTimeout)}
+	}
+
+	return parseRunnerOutput(stdout.String(), stderr.String(), err)
+}
+
+func compileGoCodeNative(dir, filename string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", "bin", filename)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

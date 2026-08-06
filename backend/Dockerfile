@@ -21,8 +21,8 @@ FROM alpine:3.19
 
 WORKDIR /app
 
-# Install CA certificates for HTTPS and timezone data
-RUN apk add --no-cache ca-certificates tzdata
+# Install CA certificates for HTTPS, timezone data, and native Go toolchain for sandbox fallback
+RUN apk add --no-cache ca-certificates tzdata go
 
 # Copy the binary from builder
 COPY --from=builder /atom-backend .
