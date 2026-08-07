@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
+	"strconv"
 
 	"backend/database"
 	"backend/models"
@@ -49,27 +51,24 @@ func CreateGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message":  "Group created successfully",
-		"group_id": group.ID,
-		"group":    group,
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "Group created successfully", "group": group})
 }
 
+// GetGroups filters groups by creator for Mentors or returns all for Admin/Supervisor
 func GetGroups(c *gin.Context) {
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
 	var groups []models.StudentGroup
-
 	query := database.DB.Preload("CreatedBy")
+
 	if creatorRole == "Mentor" {
 		query = query.Where("created_by_id = ? OR created_by_id = 0 OR created_by_id IS NULL", userID)
 	}
 
 	if err := query.Find(&groups).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch groups"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch groups"})
 		return
 	}
 
@@ -77,13 +76,19 @@ func GetGroups(c *gin.Context) {
 }
 
 func GetGroupByID(c *gin.Context) {
-	groupID := c.Param("id")
+	groupIDStr := c.Param("id")
+	idNum, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID format"})
+		return
+	}
+
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
 	var group models.StudentGroup
-	if err := database.DB.Preload("CreatedBy").Where("id = ?", groupID).First(&group).Error; err != nil {
+	if err := database.DB.Preload("CreatedBy").Where("id = ?", idNum).First(&group).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
@@ -97,13 +102,19 @@ func GetGroupByID(c *gin.Context) {
 }
 
 func UpdateGroup(c *gin.Context) {
-	groupID := c.Param("id")
+	groupIDStr := c.Param("id")
+	idNum, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID format"})
+		return
+	}
+
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
 	var group models.StudentGroup
-	if err := database.DB.Where("id = ?", groupID).First(&group).Error; err != nil {
+	if err := database.DB.Where("id = ?", idNum).First(&group).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
@@ -135,18 +146,28 @@ func UpdateGroup(c *gin.Context) {
 }
 
 func DeleteGroup(c *gin.Context) {
-	groupID := c.Param("id")
+	groupIDStr := c.Param("id")
+	idNum, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID format"})
+		return
+	}
+
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
+	log.Printf("[DeleteGroup] Attempting delete for group ID: %d by user %d (role: %s)", idNum, userID, creatorRole)
+
 	var group models.StudentGroup
-	if err := database.DB.Where("id = ?", groupID).First(&group).Error; err != nil {
+	if err := database.DB.Where("id = ?", idNum).First(&group).Error; err != nil {
+		log.Printf("[DeleteGroup] Group ID %d not found in DB: %v", idNum, err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
 
 	if creatorRole == "Mentor" && group.CreatedByID != 0 && group.CreatedByID != userID {
+		log.Printf("[DeleteGroup] Forbidden delete for group ID %d created by %d", idNum, group.CreatedByID)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You can only delete groups you created."})
 		return
 	}
