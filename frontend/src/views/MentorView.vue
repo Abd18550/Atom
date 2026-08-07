@@ -220,6 +220,7 @@ const assignStudent = async (studentId, groupId) => {
 }
 
 const confirmDeleteUser = (u) => {
+  groupToDelete.value = null
   userToDelete.value = u
   showDeleteConfirm.value = true
 }

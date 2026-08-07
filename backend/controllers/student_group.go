@@ -151,23 +151,34 @@ func DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	// 1. Find all students belonging to this group
-	var students []models.User
-	database.DB.Where("student_group_id = ?", group.ID).Find(&students)
+	// 1. Find all student user IDs belonging to this group
+	var studentIDs []uint
+	database.DB.Model(&models.User{}).Where("student_group_id = ?", group.ID).Pluck("id", &studentIDs)
 
-	// 2. Delete all submissions and user records for each student in the group
-	for _, student := range students {
-		database.DB.Where("user_id = ?", student.ID).Delete(&models.Submission{})
-		database.DB.Delete(&student)
+	// 2. If there are students in this group, delete all their submissions first
+	if len(studentIDs) > 0 {
+		if err := database.DB.Where("user_id IN (?)", studentIDs).Delete(&models.Submission{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete student submissions for group"})
+			return
+		}
+
+		// 3. Delete all student users in this group
+		if err := database.DB.Where("id IN (?)", studentIDs).Delete(&models.User{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete students in group"})
+			return
+		}
 	}
 
-	// 3. Delete the group record itself
+	// 4. Clear any lingering foreign keys if any non-student was linked
+	database.DB.Model(&models.User{}).Where("student_group_id = ?", group.ID).Update("student_group_id", nil)
+
+	// 5. Delete the StudentGroup record itself
 	if err := database.DB.Delete(&group).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group: " + err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Group and all member students deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Group and all assigned students were deleted successfully"})
 }
 
 func AssignStudentToGroup(c *gin.Context) {

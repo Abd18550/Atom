@@ -176,16 +176,19 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	// 1. Delete all submissions associated with this user
-	database.DB.Where("user_id = ?", targetUser.ID).Delete(&models.Submission{})
-
-	// 2. Delete user account
-	if err := database.DB.Delete(&targetUser).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+	// 1. Delete all submissions belonging to this user first
+	if err := database.DB.Where("user_id = ?", targetUser.ID).Delete(&models.Submission{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user submissions"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+	// 2. Delete the user record
+	if err := database.DB.Delete(&targetUser).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User and all associated submissions deleted successfully"})
 }
 
 type UpdateProfileInput struct {

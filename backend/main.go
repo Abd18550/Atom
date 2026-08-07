@@ -39,10 +39,6 @@ func main() {
 	api := r.Group("/api")
 	{
 		api.POST("/login", controllers.Login)
-		api.GET("/wipe-db-trigger-clean", func(c *gin.Context) {
-			database.WipeAllTestData(database.DB)
-			c.JSON(200, gin.H{"message": "Database wiped successfully"})
-		})
 	}
 
 	// Protected routes

@@ -43,35 +43,9 @@ func ConnectDB() {
 
 	DB = database
 
-	// Run seeders & wipe test data for fresh hosting launch
+	// Run seeders
 	seedStagesAndExercises(DB)
 	seedAdmin()
-	WipeAllTestData(DB)
-}
-
-func WipeAllTestData(db *gorm.DB) {
-	log.Println("Wiping all test submissions, students, and groups for fresh launch...")
-	
-	// 1. Break foreign key circular links first so PostgreSQL constraint does not fail
-	db.Exec("UPDATE users SET student_group_id = NULL;")
-	db.Exec("UPDATE student_groups SET created_by_id = NULL;")
-
-	// 2. Delete all submissions
-	if err := db.Exec("DELETE FROM submissions;").Error; err != nil {
-		log.Println("Wipe submissions error:", err)
-	}
-
-	// 3. Delete non-admin users
-	if err := db.Exec("DELETE FROM users WHERE LOWER(role) != 'admin';").Error; err != nil {
-		log.Println("Wipe users error:", err)
-	}
-
-	// 4. Delete student groups
-	if err := db.Exec("DELETE FROM student_groups;").Error; err != nil {
-		log.Println("Wipe student_groups error:", err)
-	}
-
-	log.Println("Database wiped successfully. Clean state ready.")
 }
 
 func seedAdmin() {
