@@ -2,7 +2,6 @@ package database
 
 import (
 	"log"
-	"os"
 	"time"
 
 	"backend/config"
@@ -53,13 +52,11 @@ func ConnectDB() {
 }
 
 func resetDatabaseData(db *gorm.DB) {
-	if os.Getenv("RESET_DB") == "true" {
-		log.Println("[DATABASE RESET] Wiping all submissions, student groups, and non-admin users...")
-		db.Exec("TRUNCATE TABLE submissions CASCADE;")
-		db.Where("role != ?", "Admin").Delete(&models.User{})
-		db.Exec("DELETE FROM student_groups;")
-		log.Println("[DATABASE RESET] Database reset completed successfully.")
-	}
+	log.Println("[DATABASE RESET] Wiping all submissions, student groups, and non-admin users...")
+	db.Exec("TRUNCATE TABLE submissions CASCADE;")
+	db.Exec("TRUNCATE TABLE student_groups CASCADE;")
+	db.Exec("DELETE FROM users WHERE role != 'Admin';")
+	log.Println("[DATABASE RESET] Database reset completed successfully.")
 }
 
 func seedAdmin() {
