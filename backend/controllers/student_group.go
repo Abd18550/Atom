@@ -83,7 +83,7 @@ func GetGroupByID(c *gin.Context) {
 	userID := userIDVal.(uint)
 
 	var group models.StudentGroup
-	if err := database.DB.Preload("CreatedBy").First(&group, groupID).Error; err != nil {
+	if err := database.DB.Preload("CreatedBy").Where("id = ?", groupID).First(&group).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
@@ -103,7 +103,7 @@ func UpdateGroup(c *gin.Context) {
 	userID := userIDVal.(uint)
 
 	var group models.StudentGroup
-	if err := database.DB.First(&group, groupID).Error; err != nil {
+	if err := database.DB.Where("id = ?", groupID).First(&group).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
@@ -141,7 +141,7 @@ func DeleteGroup(c *gin.Context) {
 	userID := userIDVal.(uint)
 
 	var group models.StudentGroup
-	if err := database.DB.First(&group, groupID).Error; err != nil {
+	if err := database.DB.Where("id = ?", groupID).First(&group).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
