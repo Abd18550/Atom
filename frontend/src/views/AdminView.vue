@@ -119,19 +119,6 @@ const cancelDelete = () => {
 }
 
 const alertState = ref({ show: false, message: '' })
-const showResetConfirm = ref(false)
-
-const resetDatabase = async () => {
-  try {
-    const res = await axios.post(`${API_BASE_URL}/api/admin/reset-database`)
-    alertState.value = { show: true, message: res.data.message || 'Database reset successfully!' }
-    await fetchUsers()
-  } catch (err) {
-    alertState.value = { show: true, message: err.response?.data?.error || 'Failed to reset database' }
-  } finally {
-    showResetConfirm.value = false
-  }
-}
 
 const executeDelete = async () => {
   if (!userToDelete.value) return;
@@ -145,19 +132,32 @@ const executeDelete = async () => {
     cancelDelete()
   }
 }
+
+const showResetConfirm = ref(false)
+
+const executeResetDatabase = async () => {
+  try {
+    const res = await axios.post(`${API_BASE_URL}/api/admin/reset-database`)
+    alertState.value = { show: true, message: res.data.message || 'Database reset successfully!' }
+    showResetConfirm.value = false
+    await fetchUsers()
+  } catch (err) {
+    alertState.value = { show: true, message: err.response?.data?.error || 'Failed to reset database' }
+  }
+}
 </script>
 
 <template>
   <div class="w-full max-w-6xl">
-    <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors">
+    <div class="mb-6 flex justify-between items-center transition-colors">
       <div>
         <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Admin Dashboard</h2>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">Manage platform accounts & system data</p>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">Manage platform accounts and system data</p>
       </div>
-      <div class="flex flex-wrap items-center gap-3">
-        <button v-if="currentUser.role === 'Admin'" @click="showResetConfirm = true" class="inline-flex items-center px-4 py-2 border border-red-500/30 rounded-lg shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm font-bold text-white bg-gradient-to-r from-rose-600 to-red-700 focus:outline-none cursor-pointer">
+      <div class="flex space-x-3">
+        <button v-if="currentUser.role === 'Admin'" @click="showResetConfirm = true" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm font-bold text-white bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 cursor-pointer">
           <svg class="-ml-1 mr-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-          Reset All Test Data
+          Wipe / Reset Database
         </button>
         <button v-if="currentUser.role === 'Admin'" @click="openModal('Supervisor')" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-fuchsia-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 cursor-pointer">
           <svg class="-ml-1 mr-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -321,32 +321,33 @@ const executeDelete = async () => {
       </div>
     </div>
 
-    <!-- Reset System Database Modal -->
-    <div v-if="showResetConfirm" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <!-- Wipe Database Confirmation Modal -->
+    <div v-if="showResetConfirm" class="fixed inset-0 z-50 overflow-y-auto">
       <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div class="fixed inset-0 bg-gray-900 bg-opacity-70 backdrop-blur-sm transition-opacity" @click="showResetConfirm = false" aria-hidden="true"></div>
-        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="fixed inset-0 bg-gray-900 bg-opacity-70 backdrop-blur-md transition-opacity" @click="showResetConfirm = false"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
-        <div class="inline-block align-bottom bg-white dark:bg-slate-800 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full border border-red-500/40 p-6">
+        <div class="inline-block align-bottom bg-white dark:bg-slate-800 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full border border-rose-500/30 p-6">
           <div class="sm:flex sm:items-start">
-            <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/50 sm:mx-0 sm:h-10 sm:w-10">
-              <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-900/50 sm:mx-0 sm:h-10 sm:w-10">
+              <svg class="h-6 w-6 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </div>
             <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-              <h3 class="text-lg leading-6 font-bold text-slate-900 dark:text-white" id="modal-title">
-                Reset All Platform Test Data
+              <h3 class="text-lg leading-6 font-bold text-slate-900 dark:text-white">
+                Wipe / Reset Platform Database
               </h3>
-              <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                This will permanently delete <b class="text-red-600 dark:text-red-400">ALL test student groups, student accounts, and problem submissions</b> to give you a clean slate like a fresh site launch. Default Admin account & learning stages will be preserved.
+              <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                <p>Are you sure you want to completely clear the database?</p>
+                <p class="font-bold text-rose-500">This will permanently delete all student accounts, groups, and exercise submissions!</p>
               </div>
             </div>
           </div>
           <div class="mt-6 flex justify-end space-x-3">
-            <button @click="showResetConfirm = false" type="button" class="px-4 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors">
+            <button @click="showResetConfirm = false" type="button" class="px-4 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors">
               Cancel
             </button>
-            <button @click="resetDatabase" type="button" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white transition-colors cursor-pointer">
-              Yes, Wipe Test Data
+            <button @click="executeResetDatabase" type="button" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-md text-xs font-bold transition-colors">
+              Confirm Wipe Database
             </button>
           </div>
         </div>
