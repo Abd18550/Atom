@@ -43,20 +43,9 @@ func ConnectDB() {
 
 	DB = database
 
-	// Run database reset to wipe all submissions, student groups, and non-admin users
-	resetDatabaseData(DB)
-
 	// Run seeders
 	seedStagesAndExercises(DB)
 	seedAdmin()
-}
-
-func resetDatabaseData(db *gorm.DB) {
-	log.Println("[DATABASE RESET] Wiping all submissions, student groups, and non-admin users...")
-	db.Exec("TRUNCATE TABLE submissions CASCADE;")
-	db.Exec("TRUNCATE TABLE student_groups CASCADE;")
-	db.Exec("DELETE FROM users WHERE role != 'Admin';")
-	log.Println("[DATABASE RESET] Database reset completed successfully.")
 }
 
 func seedAdmin() {
