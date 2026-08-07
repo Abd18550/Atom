@@ -191,23 +191,6 @@ func DeleteUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User and all associated submissions deleted successfully"})
 }
 
-// ResetDatabase clears all student data, submissions, and student groups
-func ResetDatabase(c *gin.Context) {
-	creatorRole, _ := c.Get("role")
-
-	if creatorRole != "Admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only Admins can reset the database"})
-		return
-	}
-
-	if err := database.ResetAndSeedDB(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset database: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Database reset successfully to clean initial state"})
-}
-
 type UpdateProfileInput struct {
 	Email           string `json:"email" binding:"required,email"`
 	CurrentPassword string `json:"current_password"`
