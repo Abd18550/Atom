@@ -319,7 +319,7 @@ const canManageGroup = (group) => {
           </div>
           <div class="text-4xl font-black text-white tracking-tight">{{ analytics.active_students }}</div>
           <div class="text-xs text-emerald-400 mt-2 font-medium">
-            {{ analytics.total_students > 0 ? Math.round((analytics.active_students / analytics.total_students) * 100) : 0 }}% Weekly engagement
+            {{ analytics.total_students > 0 ? Math.min(Math.round((analytics.active_students / analytics.total_students) * 100), 100) : 0 }}% Weekly engagement
           </div>
         </div>
 

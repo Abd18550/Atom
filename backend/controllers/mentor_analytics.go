@@ -177,9 +177,14 @@ func GetMentorAnalytics(c *gin.Context) {
 			st.lastActive = &t
 		}
 
-		if s.CreatedAt.After(sevenDaysAgo) {
+		if studentIDSet[s.UserID] && s.CreatedAt.After(sevenDaysAgo) {
 			activeStudentsMap[s.UserID] = true
 		}
+	}
+
+	activeStudentsCount := len(activeStudentsMap)
+	if activeStudentsCount > totalStudents {
+		activeStudentsCount = totalStudents
 	}
 
 	// Overall Pass Rate for students
@@ -342,7 +347,7 @@ func GetMentorAnalytics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"total_students":    totalStudents,
-		"active_students":   len(activeStudentsMap),
+		"active_students":   activeStudentsCount,
 		"total_submissions": totalSubmissions,
 		"overall_pass_rate": overallPassRate,
 		"groups":            groupAnalyticsList,
