@@ -53,7 +53,7 @@ func ConnectDB() {
 }
 
 func resetDatabaseData(db *gorm.DB) {
-	if os.Getenv("RESET_DB") == "true" || true {
+	if os.Getenv("RESET_DB") == "true" {
 		log.Println("[DATABASE RESET] Wiping all submissions, student groups, and non-admin users...")
 		db.Exec("TRUNCATE TABLE submissions CASCADE;")
 		db.Where("role != ?", "Admin").Delete(&models.User{})
