@@ -24,6 +24,12 @@ WORKDIR /app
 # Install CA certificates for HTTPS, timezone data, and native Go toolchain for sandbox fallback
 RUN apk add --no-cache ca-certificates tzdata go
 
+# Pre-warm Go build cache for standard library packages to ensure ultra-fast student code execution
+RUN mkdir -p /tmp/dummy && \
+    echo 'package main; import ("fmt"; "strings"; "strconv"; "os"; "encoding/json"; "reflect"; "math"); func main() { fmt.Println("warm") }' > /tmp/dummy/main.go && \
+    GO111MODULE=off go build -o /tmp/dummy/bin /tmp/dummy/main.go && \
+    rm -rf /tmp/dummy
+
 # Copy the binary from builder
 COPY --from=builder /atom-backend .
 

@@ -181,7 +181,7 @@ const layoutNodes = computed(() => {
                </div>
                
                <div 
-                 class="relative z-10 w-10 h-10 md:w-12 md:h-12 rounded-[14px] rotate-45 flex items-center justify-center shadow-lg border-2 transition-all duration-300 backdrop-blur-md"
+                 class="relative z-10 w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-[8px] sm:rounded-[14px] rotate-45 flex items-center justify-center shadow-lg border-2 transition-all duration-300 backdrop-blur-md"
                  :class="[
                     getStageStatus(stage) === 'locked' ? 'bg-slate-200/80 border-slate-300 dark:bg-slate-800/80 dark:border-slate-700 text-slate-400 dark:text-slate-600' :
                     getStageStatus(stage) === 'completed' ? 'bg-emerald-100 border-emerald-400 text-emerald-500 dark:bg-emerald-900/60 dark:border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]' :
@@ -189,8 +189,8 @@ const layoutNodes = computed(() => {
                  ]"
                >
                   <div class="-rotate-45 flex items-center justify-center">
-                    <svg v-if="getStageStatus(stage) === 'locked'" class="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
-                    <svg v-else class="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    <svg v-if="getStageStatus(stage) === 'locked'" class="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
+                    <svg v-else class="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                   </div>
                </div>
              </div>

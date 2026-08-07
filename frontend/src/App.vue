@@ -93,8 +93,14 @@ const toggleDark = async () => {
   }
 }
 
+const pingBackendToWakeUp = () => {
+  // Silent background ping to wake up Render container if cold starting
+  fetch(`${API_BASE_URL}/api/learning-path`, { method: 'GET' }).catch(() => {})
+}
+
 onMounted(() => {
   initTheme()
+  pingBackendToWakeUp()
 })
 </script>
 

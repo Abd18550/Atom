@@ -85,15 +85,32 @@ watch(() => route.params.id, (newId) => {
   }
 })
 
+const rateLimitCooldown = ref(0)
+let cooldownTimer = null
+
+const startRateLimitCooldown = (seconds = 5) => {
+  rateLimitCooldown.value = seconds
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    rateLimitCooldown.value--
+    if (rateLimitCooldown.value <= 0) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
+
 onUnmounted(() => {
   if (pollingInterval) clearInterval(pollingInterval)
   if (countdownTimer) clearInterval(countdownTimer)
+  if (cooldownTimer) clearInterval(cooldownTimer)
 })
 
 const submitCode = async () => {
-  if (!code.value.trim()) return
+  if (submitting.value || rateLimitCooldown.value > 0 || !code.value.trim()) return
   
   submitting.value = true
+  startRateLimitCooldown(5)
   submissionResult.value = { status: 'Pending', message: 'Queued for grading...' }
 
   try {
@@ -110,6 +127,9 @@ const submitCode = async () => {
   } catch (err) {
     console.error("Submission failed", err)
     let errMsg = err.response?.data?.error || 'Failed to submit code. Please try again.'
+    if (err.response?.status === 429) {
+      startRateLimitCooldown(5)
+    }
     submissionResult.value = {
       status: 'Error',
       error_message: errMsg
@@ -248,21 +268,21 @@ const pollSubmissionStatus = (id) => {
 <template>
   <div v-if="loading" class="text-white animate-pulse">Loading Question...</div>
   
-  <div v-else-if="exercise" class="w-full max-w-7xl h-[80vh] flex flex-col lg:flex-row gap-6 mx-auto">
+  <div v-else-if="exercise" class="w-full max-w-7xl min-h-[calc(100vh-5rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-6 mx-auto pb-12 lg:pb-0 overflow-y-auto lg:overflow-hidden px-2 sm:px-4">
     
     <!-- Left Panel: Description & Results -->
-    <div class="lg:w-1/3 flex flex-col gap-6">
+    <div class="w-full lg:w-1/3 flex flex-col gap-6 flex-shrink-0">
       
       <!-- Instructions Card -->
-      <div class="bg-gray-800/80 backdrop-blur rounded-2xl p-6 shadow-xl border border-gray-700/50 flex flex-col flex-grow">
-        <h1 class="text-2xl font-bold text-white mb-2">{{ exercise.title }}</h1>
-        <div class="prose prose-invert prose-indigo max-w-none text-gray-300 whitespace-pre-wrap flex-grow overflow-y-auto font-mono text-sm leading-relaxed">
+      <div class="bg-gray-800/80 backdrop-blur rounded-2xl p-4 sm:p-6 shadow-xl border border-gray-700/50 flex flex-col max-h-[380px] lg:max-h-none lg:flex-grow">
+        <h1 class="text-xl sm:text-2xl font-bold text-white mb-2">{{ exercise.title }}</h1>
+        <div class="prose prose-invert prose-indigo max-w-none text-gray-300 whitespace-pre-wrap flex-grow overflow-y-auto font-mono text-xs sm:text-sm leading-relaxed pr-1">
           {{ exercise.description }}
         </div>
       </div>
 
       <!-- Results Card (Shows when submitted) -->
-      <div v-if="submissionResult" class="bg-gray-800/80 backdrop-blur rounded-2xl p-6 shadow-xl border border-gray-700/50">
+      <div v-if="submissionResult" class="bg-gray-800/80 backdrop-blur rounded-2xl p-4 sm:p-6 shadow-xl border border-gray-700/50">
         <h2 class="text-lg font-bold text-white mb-4">Output Console</h2>
         
         <div class="space-y-4">
@@ -285,13 +305,13 @@ const pollSubmissionStatus = (id) => {
           </div>
 
           <!-- Syntax / Runtime Error -->
-          <div v-if="submissionResult.status === 'SyntaxError' || submissionResult.status === 'Error'" class="bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-red-400 font-mono text-sm whitespace-pre-wrap overflow-x-auto">
+          <div v-if="submissionResult.status === 'SyntaxError' || submissionResult.status === 'Error'" class="bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-red-400 font-mono text-xs sm:text-sm whitespace-pre-wrap overflow-x-auto">
             {{ submissionResult.error_message || submissionResult.message }}
           </div>
 
           <!-- Logic Failure -->
           <div v-if="submissionResult.status === 'Failed'" class="space-y-3">
-             <div class="text-sm font-semibold text-red-400">Failed on test input: <span class="bg-gray-900 px-2 py-1 rounded">{{ submissionResult.failed_testcase }}</span></div>
+             <div class="text-xs sm:text-sm font-semibold text-red-400">Failed on test input: <span class="bg-gray-900 px-2 py-1 rounded">{{ submissionResult.failed_testcase }}</span></div>
              <div class="grid grid-cols-2 gap-4">
                 <div>
                   <div class="text-xs text-gray-400 mb-1">Expected Output</div>
@@ -313,7 +333,7 @@ const pollSubmissionStatus = (id) => {
     </div>
 
     <!-- Right Panel: Code Editor -->
-    <div class="lg:w-2/3 bg-gray-900 rounded-2xl shadow-xl flex flex-col border border-gray-700/50 overflow-hidden">
+    <div class="w-full lg:w-2/3 min-h-[420px] sm:min-h-[500px] lg:min-h-0 bg-gray-900 rounded-2xl shadow-xl flex flex-col border border-gray-700/50 overflow-hidden flex-grow">
       <div class="bg-gray-800 px-4 py-3 flex justify-between items-center border-b border-gray-700/50">
          <div class="text-gray-300 font-semibold flex items-center gap-2">
             <svg class="h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -323,7 +343,7 @@ const pollSubmissionStatus = (id) => {
          </div>
          <button 
           @click="submitCode"
-          :disabled="submitting || !code.trim()"
+          :disabled="submitting || rateLimitCooldown > 0 || !code.trim()"
           class="flex items-center space-x-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold py-1.5 px-4 rounded-lg shadow-lg transition-all"
         >
           <svg v-if="submitting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -334,7 +354,7 @@ const pollSubmissionStatus = (id) => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>{{ submitting ? 'Running...' : 'Run Code' }}</span>
+          <span>{{ submitting ? 'Running...' : (rateLimitCooldown > 0 ? `Wait (${rateLimitCooldown}s)` : 'Run Code') }}</span>
         </button>
       </div>
       <div class="flex-grow relative overflow-hidden">
