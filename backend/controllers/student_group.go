@@ -65,7 +65,7 @@ func GetGroups(c *gin.Context) {
 
 	query := database.DB.Preload("CreatedBy")
 	if creatorRole == "Mentor" {
-		query = query.Where("created_by_id = ?", userID)
+		query = query.Where("created_by_id = ? OR created_by_id = 0 OR created_by_id IS NULL", userID)
 	}
 
 	if err := query.Find(&groups).Error; err != nil {
@@ -88,7 +88,7 @@ func GetGroupByID(c *gin.Context) {
 		return
 	}
 
-	if creatorRole == "Mentor" && group.CreatedByID != userID {
+	if creatorRole == "Mentor" && group.CreatedByID != 0 && group.CreatedByID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You can only view groups you created."})
 		return
 	}
@@ -108,7 +108,7 @@ func UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	if creatorRole == "Mentor" && group.CreatedByID != userID {
+	if creatorRole == "Mentor" && group.CreatedByID != 0 && group.CreatedByID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You can only manage groups you created."})
 		return
 	}
@@ -122,6 +122,9 @@ func UpdateGroup(c *gin.Context) {
 	group.SchoolName = input.SchoolName
 	group.Class = input.Class
 	group.AcademicYear = input.AcademicYear
+	if group.CreatedByID == 0 {
+		group.CreatedByID = userID
+	}
 
 	if err := database.DB.Save(&group).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update group"})
@@ -143,7 +146,7 @@ func DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	if creatorRole == "Mentor" && group.CreatedByID != userID {
+	if creatorRole == "Mentor" && group.CreatedByID != 0 && group.CreatedByID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You can only delete groups you created."})
 		return
 	}

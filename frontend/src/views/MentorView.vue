@@ -122,6 +122,16 @@ const studentChartData = computed(() => {
   }))
 })
 
+const maxGroupXP = computed(() => {
+  if (!analytics.value || !analytics.value.groups || analytics.value.groups.length === 0) return 100
+  return Math.max(...analytics.value.groups.map(g => g.average_xp), 100)
+})
+
+const maxStudentXP = computed(() => {
+  if (!studentChartData.value || studentChartData.value.length === 0) return 100
+  return Math.max(...studentChartData.value.map(s => s.xp), 100)
+})
+
 const formatRelativeTime = (dateStr) => {
   if (!dateStr) return 'Inactive'
   const date = new Date(dateStr)
@@ -164,6 +174,7 @@ const handleGroupSubmit = async () => {
 }
 
 const confirmDeleteGroup = (g) => {
+  userToDelete.value = null
   groupToDelete.value = g
   showDeleteConfirm.value = true
 }
@@ -452,36 +463,65 @@ const executeUserDelete = async () => {
           </div>
         </div>
 
-        <!-- Chart View A: Group vs Group Comparison -->
+        <!-- Chart View A: Group vs Group Comparison (Vertical Bar Chart) -->
         <div v-if="activeChartTab === 'groups'" class="space-y-4">
-          <p class="text-xs text-slate-400">Comparing average XP per student across your managed groups:</p>
+          <p class="text-xs text-slate-400">Vertical Column Chart comparing Average XP across groups (Y-Axis: XP, X-Axis: Groups):</p>
           
           <div v-if="groupComparisonData.length === 0" class="p-8 text-center text-slate-500 text-xs">
             No groups available to compare.
           </div>
 
-          <div v-else class="space-y-4">
-            <div v-for="g in groupComparisonData" :key="g.id" class="space-y-1.5">
-              <div class="flex justify-between text-xs font-semibold">
-                <span class="text-white">{{ g.name }} ({{ g.student_count }} students)</span>
-                <span class="text-amber-400 font-bold">{{ g.average_xp }} Avg XP • {{ g.passed_count }} Solved</span>
+          <div v-else class="relative w-full h-80 pt-8 pb-14 px-10 bg-slate-900/90 rounded-2xl border border-slate-700/60 flex flex-col justify-end">
+            <!-- Y-Axis Ticks & Horizontal Grid Lines -->
+            <div class="absolute inset-y-8 left-2 right-4 flex flex-col justify-between pointer-events-none text-[10px] font-mono text-slate-400">
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2 font-bold text-amber-400">{{ Math.round(maxGroupXP) }} XP</span>
               </div>
-              <div class="h-3.5 bg-slate-900/80 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
-                <div 
-                  class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-amber-400 rounded-full transition-all duration-700 relative"
-                  :style="{ width: g.xpPercent + '%' }"
-                >
-                  <div class="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2">{{ Math.round(maxGroupXP * 0.75) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2">{{ Math.round(maxGroupXP * 0.5) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2">{{ Math.round(maxGroupXP * 0.25) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b-2 border-indigo-500/60">
+                <span class="w-12 text-right pr-2 text-indigo-400 font-bold">0</span>
+              </div>
+            </div>
+
+            <!-- X-Axis Baseline & Vertical Columns -->
+            <div class="relative ml-12 h-full flex items-end justify-around gap-4 z-10">
+              <div v-for="g in groupComparisonData" :key="g.id" class="flex-1 flex flex-col items-center h-full justify-end group">
+                <!-- Top Value Badge -->
+                <span class="text-[11px] font-black text-amber-400 group-hover:scale-110 transition-transform mb-1.5 bg-slate-950/80 px-2 py-0.5 rounded-md border border-amber-500/30">
+                  {{ g.average_xp }} XP
+                </span>
+
+                <!-- Vertical Column Bar extending UPWARDS -->
+                <div class="w-full max-w-[64px] bg-slate-800/80 rounded-t-2xl overflow-hidden flex items-end h-full relative border border-slate-700/60 shadow-xl">
+                  <div 
+                    class="w-full bg-gradient-to-t from-indigo-600 via-purple-600 to-amber-400 rounded-t-xl transition-all duration-700 relative"
+                    :style="{ height: Math.max(5, (g.average_xp / maxGroupXP * 100)) + '%' }"
+                  >
+                    <div class="absolute inset-0 bg-white/10 group-hover:bg-white/20 transition-colors"></div>
+                  </div>
                 </div>
+
+                <!-- X-Axis Label -->
+                <span class="text-[11px] font-bold text-slate-300 truncate max-w-[110px] text-center mt-2.5 group-hover:text-indigo-400 transition-colors">
+                  {{ g.name }}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Chart View B: Student Performance Rankings within Group -->
+        <!-- Chart View B: Student Performance Rankings (Vertical Bar Chart) -->
         <div v-else class="space-y-4">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <p class="text-xs text-slate-400">Top 10 performing students by total XP:</p>
+            <p class="text-xs text-slate-400">Vertical Column Chart of Top Students by XP (Y-Axis: XP, X-Axis: Student Names):</p>
             <select 
               v-model="selectedChartGroup" 
               class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 text-slate-200 outline-none focus:border-indigo-500"
@@ -495,20 +535,48 @@ const executeUserDelete = async () => {
             No student data found for this selection.
           </div>
 
-          <div v-else class="space-y-3">
-            <div v-for="(st, idx) in studentChartData" :key="st.id" class="space-y-1">
-              <div class="flex justify-between items-center text-xs">
-                <span class="font-bold text-slate-200 flex items-center gap-2">
-                  <span class="w-5 h-5 flex items-center justify-center rounded-md bg-slate-900 text-[10px] font-black text-indigo-400">#{{ idx + 1 }}</span>
-                  {{ st.full_name }} <span class="text-slate-500 font-normal">({{ st.group_name }})</span>
-                </span>
-                <span class="text-amber-400 font-bold">{{ st.xp }} XP</span>
+          <div v-else class="relative w-full h-80 pt-8 pb-14 px-10 bg-slate-900/90 rounded-2xl border border-slate-700/60 flex flex-col justify-end">
+            <!-- Y-Axis Ticks & Horizontal Grid Lines -->
+            <div class="absolute inset-y-8 left-2 right-4 flex flex-col justify-between pointer-events-none text-[10px] font-mono text-slate-400">
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2 font-bold text-amber-400">{{ Math.round(maxStudentXP) }} XP</span>
               </div>
-              <div class="h-3 bg-slate-900/80 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
-                <div 
-                  class="h-full bg-gradient-to-r from-emerald-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-700"
-                  :style="{ width: st.xpPercent + '%' }"
-                ></div>
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2">{{ Math.round(maxStudentXP * 0.75) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2">{{ Math.round(maxStudentXP * 0.5) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b border-slate-800/80">
+                <span class="w-12 text-right pr-2">{{ Math.round(maxStudentXP * 0.25) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b-2 border-emerald-500/60">
+                <span class="w-12 text-right pr-2 text-emerald-400 font-bold">0</span>
+              </div>
+            </div>
+
+            <!-- X-Axis Baseline & Vertical Columns -->
+            <div class="relative ml-12 h-full flex items-end justify-around gap-3 z-10">
+              <div v-for="st in studentChartData" :key="st.id" class="flex-1 flex flex-col items-center h-full justify-end group">
+                <!-- Top Value Badge -->
+                <span class="text-[10px] font-black text-emerald-400 group-hover:scale-110 transition-transform mb-1 bg-slate-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                  {{ st.xp }} XP
+                </span>
+
+                <!-- Vertical Column Bar extending UPWARDS -->
+                <div class="w-full max-w-[48px] bg-slate-800/80 rounded-t-xl overflow-hidden flex items-end h-full relative border border-slate-700/60 shadow-lg">
+                  <div 
+                    class="w-full bg-gradient-to-t from-emerald-600 via-teal-500 to-amber-400 rounded-t-xl transition-all duration-700 relative"
+                    :style="{ height: Math.max(5, (st.xp / maxStudentXP * 100)) + '%' }"
+                  >
+                    <div class="absolute inset-0 bg-white/10 group-hover:bg-white/20 transition-colors"></div>
+                  </div>
+                </div>
+
+                <!-- X-Axis Label -->
+                <span class="text-[10px] font-bold text-slate-300 truncate max-w-[80px] text-center mt-2 group-hover:text-emerald-400 transition-colors">
+                  {{ st.full_name }}
+                </span>
               </div>
             </div>
           </div>

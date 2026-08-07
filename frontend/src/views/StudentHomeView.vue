@@ -67,6 +67,11 @@ const stageProgress = computed(() => {
   return Math.round((stats.value.completed_stages / stats.value.total_stages) * 100)
 })
 
+const maxGroupPeerXP = computed(() => {
+  if (!groupData.value || !groupData.value.peers || groupData.value.peers.length === 0) return 100
+  return Math.max(...groupData.value.peers.map(p => p.xp), groupData.value.group_avg_xp || 0, 100)
+})
+
 const greetingMessage = computed(() => {
   const hour = new Date().getHours()
   if (hour < 12) return 'Good Morning'
@@ -250,39 +255,68 @@ const goToCurrentStage = () => {
           </div>
         </div>
 
-        <!-- XP Comparison Bar (My XP vs Group Avg XP) -->
-        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-700/50 space-y-3">
+        <!-- Visual Dedicated Vertical Column Chart (XY Positive Axes System) -->
+        <div class="space-y-3">
           <div class="flex justify-between items-center text-xs">
-            <span class="font-semibold text-slate-700 dark:text-slate-300">Your XP vs Class Average</span>
-            <span class="font-bold text-amber-500">{{ groupData.my_xp }} XP (Class Avg: {{ groupData.group_avg_xp }} XP)</span>
+            <span class="font-bold text-slate-700 dark:text-slate-200">Class Performance Comparison Chart</span>
+            <span class="font-bold text-amber-500">Your XP: {{ groupData.my_xp }} • Class Avg: {{ groupData.group_avg_xp }} XP</span>
           </div>
 
-          <div class="space-y-2">
-            <!-- My XP bar -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                <span>You</span>
-                <span>{{ groupData.my_xp }} XP</span>
+          <div class="relative w-full h-72 pt-8 pb-12 px-8 bg-slate-50 dark:bg-slate-900/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-end">
+            <!-- Y-Axis Ticks & Horizontal Grid Lines -->
+            <div class="absolute inset-y-8 left-2 right-4 flex flex-col justify-between pointer-events-none text-[10px] font-mono text-slate-400 dark:text-slate-500">
+              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
+                <span class="w-10 text-right pr-2 font-bold text-amber-500">{{ Math.round(maxGroupPeerXP) }} XP</span>
               </div>
-              <div class="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  class="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-700"
-                  :style="{ width: Math.min(100, Math.round((groupData.my_xp / Math.max(groupData.my_xp, groupData.group_avg_xp, 100)) * 100)) + '%' }"
-                ></div>
+              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
+                <span class="w-10 text-right pr-2">{{ Math.round(maxGroupPeerXP * 0.75) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
+                <span class="w-10 text-right pr-2">{{ Math.round(maxGroupPeerXP * 0.5) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
+                <span class="w-10 text-right pr-2">{{ Math.round(maxGroupPeerXP * 0.25) }}</span>
+              </div>
+              <div class="flex items-center w-full border-b-2 border-indigo-500/60">
+                <span class="w-10 text-right pr-2 text-indigo-500 font-bold">0</span>
               </div>
             </div>
 
-            <!-- Group Avg bar -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                <span>Class Average</span>
-                <span>{{ groupData.group_avg_xp }} XP</span>
-              </div>
-              <div class="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <!-- X-Axis Baseline & Vertical Columns -->
+            <div class="relative ml-10 h-full flex items-end justify-around gap-2 z-10">
+              <div 
+                v-for="peer in groupData.peers" 
+                :key="peer.id" 
+                class="flex-1 flex flex-col items-center h-full justify-end group"
+              >
+                <!-- Top Value Badge -->
+                <span 
+                  class="text-[10px] font-black group-hover:scale-110 transition-transform mb-1 px-1.5 py-0.5 rounded"
+                  :class="peer.is_me ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'bg-slate-200 dark:bg-slate-800 text-amber-500 border border-amber-500/20'"
+                >
+                  {{ peer.xp }} XP
+                </span>
+
+                <!-- Vertical Column Bar extending UPWARDS -->
                 <div 
-                  class="h-full bg-gradient-to-r from-indigo-400 to-purple-500 rounded-full transition-all duration-700 opacity-80"
-                  :style="{ width: Math.min(100, Math.round((groupData.group_avg_xp / Math.max(groupData.my_xp, groupData.group_avg_xp, 100)) * 100)) + '%' }"
-                ></div>
+                  class="w-full max-w-[42px] bg-slate-200 dark:bg-slate-800/90 rounded-t-xl overflow-hidden flex items-end h-full relative border border-slate-300 dark:border-slate-700/60 shadow-md"
+                >
+                  <div 
+                    class="w-full rounded-t-xl transition-all duration-700 relative"
+                    :class="peer.is_me ? 'bg-gradient-to-t from-amber-500 via-orange-500 to-yellow-400 shadow-lg shadow-amber-500/30' : 'bg-gradient-to-t from-indigo-500 via-purple-500 to-indigo-400 opacity-75'"
+                    :style="{ height: Math.max(6, (peer.xp / maxGroupPeerXP * 100)) + '%' }"
+                  >
+                    <div v-if="peer.is_me" class="absolute inset-0 bg-white/20 animate-pulse rounded-t-xl"></div>
+                  </div>
+                </div>
+
+                <!-- X-Axis Label -->
+                <span 
+                  class="text-[10px] font-bold truncate max-w-[70px] text-center mt-2 group-hover:text-indigo-500 transition-colors"
+                  :class="peer.is_me ? 'text-amber-500 font-black' : 'text-slate-600 dark:text-slate-300'"
+                >
+                  {{ peer.is_me ? 'YOU' : peer.full_name.split(' ')[0] }}
+                </span>
               </div>
             </div>
           </div>
