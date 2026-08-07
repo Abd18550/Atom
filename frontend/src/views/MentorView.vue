@@ -49,7 +49,9 @@ const fetchAllData = async () => {
     analytics.value = analyticsRes.data
     groupComparisons.value = comparisonRes.data
   } catch (err) {
-    error.value = 'Failed to load mentor analytics. Please try again.'
+    console.error('Mentor Analytics fetch error:', err)
+    const backendErr = err.response?.data?.error || err.response?.data?.message || err.message
+    error.value = backendErr ? `Analytics error: ${backendErr}` : 'Failed to load mentor analytics. Please try again.'
   } finally {
     loading.value = false
   }

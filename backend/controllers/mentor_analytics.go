@@ -49,31 +49,34 @@ type RecentActivityItem struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// getOwnedGroupIDs returns group IDs the current user can access
-func getOwnedGroupIDs(c *gin.Context) []uint {
-	role, _ := c.Get("role")
-	userID, _ := c.Get("userID")
+// getUserContext extracts userID and role safely from gin Context
+func getUserContext(c *gin.Context) (uint, string) {
+	var userID uint
+	var role string
 
-	var groups []models.StudentGroup
-
-	if role == "Mentor" {
-		database.DB.Where("created_by_id = ?", userID).Find(&groups)
-	} else {
-		// Admin / Supervisor see all
-		database.DB.Find(&groups)
+	if val, exists := c.Get("userID"); exists {
+		switch v := val.(type) {
+		case uint:
+			userID = v
+		case float64:
+			userID = uint(v)
+		case int:
+			userID = uint(v)
+		}
 	}
 
-	ids := make([]uint, len(groups))
-	for i, g := range groups {
-		ids[i] = g.ID
+	if val, exists := c.Get("role"); exists {
+		if r, ok := val.(string); ok {
+			role = r
+		}
 	}
-	return ids
+
+	return userID, role
 }
 
 // GetMentorAnalytics aggregates student performance scoped to owned groups
 func GetMentorAnalytics(c *gin.Context) {
-	role, _ := c.Get("role")
-	userID, _ := c.Get("userID")
+	userID, role := getUserContext(c)
 
 	// 1. Fetch groups scoped to ownership
 	var groups []models.StudentGroup
@@ -88,14 +91,14 @@ func GetMentorAnalytics(c *gin.Context) {
 		groupIDSet[g.ID] = true
 	}
 
-	// 2. Fetch ONLY students (role=Student) in owned groups
+	// 2. Fetch ONLY students (role=Student)
 	var allStudents []models.User
 	database.DB.Preload("StudentGroup").Where("role = ?", "Student").Find(&allStudents)
 
-	// Filter to only students belonging to owned groups
+	// Mentors see students in their owned groups. Admins/Supervisors see all students.
 	var students []models.User
 	for _, s := range allStudents {
-		if s.StudentGroupID != nil && groupIDSet[*s.StudentGroupID] {
+		if role != "Mentor" || (s.StudentGroupID != nil && groupIDSet[*s.StudentGroupID]) {
 			students = append(students, s)
 		}
 	}
@@ -215,10 +218,15 @@ func GetMentorAnalytics(c *gin.Context) {
 			groupPassedCountMap[*s.StudentGroupID] += passedQCount
 		}
 
+		fullName := s.FullName
+		if fullName == "" {
+			fullName = s.Username
+		}
+
 		studentRoster = append(studentRoster, StudentAnalyticsItem{
 			ID:               s.ID,
 			Username:         s.Username,
-			FullName:         s.FullName,
+			FullName:         fullName,
 			Email:            s.Email,
 			Avatar:           s.Avatar,
 			GroupName:        groupName,
@@ -271,10 +279,15 @@ func GetMentorAnalytics(c *gin.Context) {
 			title = exMap[*sub.ExerciseID]
 		}
 
+		sName := u.FullName
+		if sName == "" {
+			sName = u.Username
+		}
+
 		activityFeed = append(activityFeed, RecentActivityItem{
 			ID:            sub.ID,
 			StudentID:     sub.UserID,
-			StudentName:   u.FullName,
+			StudentName:   sName,
 			StudentAvatar: u.Avatar,
 			TargetTitle:   title,
 			Status:        sub.Status,
@@ -295,8 +308,7 @@ func GetMentorAnalytics(c *gin.Context) {
 
 // GetGroupComparison returns comparison metrics for all owned groups (for bar charts)
 func GetGroupComparison(c *gin.Context) {
-	role, _ := c.Get("role")
-	userID, _ := c.Get("userID")
+	userID, role := getUserContext(c)
 
 	var groups []models.StudentGroup
 	if role == "Mentor" {
@@ -390,7 +402,7 @@ func GetGroupComparison(c *gin.Context) {
 
 // GetStudentGroupPeers returns anonymized group peer data for student comparison charts
 func GetStudentGroupPeers(c *gin.Context) {
-	currentUserID, _ := c.Get("userID")
+	currentUserID, _ := getUserContext(c)
 
 	// Get current user
 	var currentUser models.User
@@ -440,7 +452,7 @@ func GetStudentGroupPeers(c *gin.Context) {
 	peerIndex := 1
 	for _, p := range peers {
 		label := ""
-		isCurrent := p.ID == currentUserID.(uint)
+		isCurrent := p.ID == currentUserID
 		if isCurrent {
 			label = "You"
 		} else {
@@ -448,7 +460,6 @@ func GetStudentGroupPeers(c *gin.Context) {
 			if label == "" {
 				label = p.Username
 			}
-			// Abbreviate: "John Doe" -> "John D."
 			if len(label) > 12 {
 				label = label[:12] + "."
 			}
