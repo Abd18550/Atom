@@ -51,6 +51,7 @@ func main() {
 		protected.GET("/student-stats", controllers.GetStudentStats)
 		protected.GET("/student/group-comparison", controllers.GetStudentGroupComparison)
 		protected.GET("/mentor/analytics", middleware.RoleMiddleware("Admin", "Supervisor", "Mentor"), controllers.GetMentorAnalytics)
+		protected.POST("/admin/reset-database", middleware.RoleMiddleware("Admin"), controllers.ResetDatabase)
 
 		// Admin, Supervisor, & Mentor can access the basic user list
 		usersGroup := protected.Group("/users")

@@ -72,3 +72,23 @@ func seedAdmin() {
 		log.Println("Admin user already exists.")
 	}
 }
+
+// ResetAndSeedDB wipes submissions, student groups, and student users to reset the DB to clean state
+func ResetAndSeedDB() error {
+	// Truncate submissions and student_groups
+	if err := DB.Exec("TRUNCATE TABLE submissions, student_groups CASCADE;").Error; err != nil {
+		DB.Exec("DELETE FROM submissions;")
+		DB.Exec("DELETE FROM student_groups;")
+	}
+
+	// Delete all student users
+	if err := DB.Where("role = ?", "Student").Delete(&models.User{}).Error; err != nil {
+		return err
+	}
+
+	// Re-run seeders
+	seedStagesAndExercises(DB)
+	seedAdmin()
+
+	return nil
+}
