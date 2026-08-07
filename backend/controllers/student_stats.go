@@ -126,56 +126,18 @@ func GetStudentStats(c *gin.Context) {
 	currentLevelXP := getCurrentLevelXP(user.Level)
 	nextLevelXP := getNextLevelXP(user.Level)
 
-	// Calculate group average XP and passed questions for group comparison chart
-	groupAvgXP := 0.0
-	groupAvgPassed := 0.0
-	if user.StudentGroupID != nil {
-		var groupStudents []models.User
-		database.DB.Where("student_group_id = ? AND role = ?", *user.StudentGroupID, "Student").Find(&groupStudents)
-		if len(groupStudents) > 0 {
-			var totalGroupXP int
-			for _, gs := range groupStudents {
-				totalGroupXP += gs.XP
-			}
-			groupAvgXP = float64(totalGroupXP) / float64(len(groupStudents))
-
-			studentIDs := make([]uint, len(groupStudents))
-			for i, gs := range groupStudents {
-				studentIDs[i] = gs.ID
-			}
-			type Result struct {
-				UserID uint
-				Count  int
-			}
-			var results []Result
-			database.DB.Model(&models.Submission{}).
-				Select("user_id, count(distinct stage_question_id) as count").
-				Where("user_id IN ? AND status = ? AND stage_question_id IS NOT NULL", studentIDs, "Passed").
-				Group("user_id").
-				Scan(&results)
-
-			totalGroupPassed := 0
-			for _, r := range results {
-				totalGroupPassed += r.Count
-			}
-			groupAvgPassed = float64(totalGroupPassed) / float64(len(groupStudents))
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"xp":                   user.XP,
-		"level":                user.Level,
-		"level_title":          levelTitle,
-		"current_level_xp":     currentLevelXP,
-		"next_level_xp":        nextLevelXP,
-		"total_stages":         totalStages,
-		"completed_stages":     completedStages,
-		"current_stage_id":     currentStageID,
-		"current_stage_title":  currentStageTitle,
-		"total_questions":      totalQuestions,
-		"passed_questions":     passedQuestions,
-		"passed_exercises":     passedExercises,
-		"group_avg_xp":         groupAvgXP,
-		"group_avg_passed":     groupAvgPassed,
+		"xp":                 user.XP,
+		"level":              user.Level,
+		"level_title":        levelTitle,
+		"current_level_xp":   currentLevelXP,
+		"next_level_xp":      nextLevelXP,
+		"total_stages":       totalStages,
+		"completed_stages":   completedStages,
+		"current_stage_id":   currentStageID,
+		"current_stage_title": currentStageTitle,
+		"total_questions":    totalQuestions,
+		"passed_questions":   passedQuestions,
+		"passed_exercises":   passedExercises,
 	})
 }

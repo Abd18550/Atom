@@ -4,8 +4,6 @@ import WelcomeView from '../views/WelcomeView.vue'
 import AdminView from '../views/AdminView.vue'
 import MentorView from '../views/MentorView.vue'
 import ProfileView from '../views/ProfileView.vue'
-import GroupsView from '../views/GroupsView.vue'
-import GroupDetailsView from '../views/GroupDetailsView.vue'
 import ExerciseListView from '../views/ExerciseListView.vue'
 import ExerciseView from '../views/ExerciseView.vue'
 import AdminExercisesView from '../views/AdminExercisesView.vue'
@@ -103,18 +101,6 @@ const router = createRouter({
             path: '/mentor',
             name: 'mentor',
             component: MentorView,
-            meta: { requiresAuth: true, roles: ['Admin', 'Supervisor', 'Mentor'] }
-        },
-        {
-            path: '/groups',
-            name: 'groups',
-            component: GroupsView,
-            meta: { requiresAuth: true, roles: ['Admin', 'Supervisor', 'Mentor'] }
-        },
-        {
-            path: '/groups/:id',
-            name: 'group-details',
-            component: GroupDetailsView,
             meta: { requiresAuth: true, roles: ['Admin', 'Supervisor', 'Mentor'] }
         }
     ]

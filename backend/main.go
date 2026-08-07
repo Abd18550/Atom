@@ -49,6 +49,7 @@ func main() {
 		protected.PUT("/profile", controllers.UpdateProfile)
 		protected.PUT("/theme", controllers.UpdateTheme)
 		protected.GET("/student-stats", controllers.GetStudentStats)
+		protected.GET("/student/group-comparison", controllers.GetStudentGroupComparison)
 		protected.GET("/mentor/analytics", middleware.RoleMiddleware("Admin", "Supervisor", "Mentor"), controllers.GetMentorAnalytics)
 
 		// Admin, Supervisor, & Mentor can access the basic user list
@@ -68,6 +69,7 @@ func main() {
 			groupsGroup.POST("", controllers.CreateGroup)
 			groupsGroup.PUT("/:id", controllers.UpdateGroup)
 			groupsGroup.DELETE("/:id", controllers.DeleteGroup)
+			groupsGroup.POST("/assign-student", controllers.AssignStudentToGroup)
 		}
 
 		// Learning Path & Stages

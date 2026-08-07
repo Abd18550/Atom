@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"math"
 	"net/http"
 	"time"
@@ -14,17 +13,11 @@ import (
 
 // GroupAnalyticsItem represents performance statistics for a group
 type GroupAnalyticsItem struct {
-	ID                   uint    `json:"id"`
-	SchoolName           string  `json:"school_name"`
-	Class                string  `json:"class"`
-	AcademicYear         string  `json:"academic_year"`
-	Name                 string  `json:"name"`
-	CreatedByName        string  `json:"created_by_name"`
-	CreatedByUserID      *uint   `json:"created_by_user_id"`
-	StudentCount         int     `json:"student_count"`
-	AverageXP            float64 `json:"average_xp"`
-	TotalPassedQuestions int     `json:"total_passed_questions"`
-	AveragePassRate      float64 `json:"average_pass_rate"`
+	ID           uint    `json:"id"`
+	Name         string  `json:"name"`
+	StudentCount int     `json:"student_count"`
+	AverageXP    float64 `json:"average_xp"`
+	PassedCount  int     `json:"passed_count"`
 }
 
 // StudentAnalyticsItem represents detailed performance metrics for a student
@@ -34,7 +27,6 @@ type StudentAnalyticsItem struct {
 	FullName         string     `json:"full_name"`
 	Email            string     `json:"email"`
 	Avatar           string     `json:"avatar"`
-	GroupID          *uint      `json:"group_id"`
 	GroupName        string     `json:"group_name"`
 	XP               int        `json:"xp"`
 	Level            int        `json:"level"`
@@ -43,8 +35,6 @@ type StudentAnalyticsItem struct {
 	TotalSubmissions int        `json:"total_submissions"`
 	SuccessRate      float64    `json:"success_rate"`
 	LastActive       *time.Time `json:"last_active"`
-	GroupAvgXP       float64    `json:"group_avg_xp"`
-	GroupAvgPassed   float64    `json:"group_avg_passed"`
 }
 
 // RecentActivityItem represents a recent submission attempt by a student
@@ -60,65 +50,46 @@ type RecentActivityItem struct {
 
 // GetMentorAnalytics aggregates overall student performance, group comparison, and recent activity
 func GetMentorAnalytics(c *gin.Context) {
-	requesterRole, _ := c.Get("role")
-
-	var requesterID uint
-	if uid, exists := c.Get("userID"); exists {
-		if id, ok := uid.(uint); ok {
-			requesterID = id
-		} else if idFloat, ok := uid.(float64); ok {
-			requesterID = uint(idFloat)
-		}
-	}
+	creatorRole, _ := c.Get("role")
+	userIDVal, _ := c.Get("userID")
+	userID := userIDVal.(uint)
 
 	// 1. Fetch groups based on role
 	var groups []models.StudentGroup
-	if requesterRole == "Admin" || requesterRole == "Supervisor" {
-		database.DB.Preload("CreatedBy").Find(&groups)
-	} else { // Mentor: strictly groups created by this mentor
-		database.DB.Preload("CreatedBy").Where("created_by_user_id = ?", requesterID).Find(&groups)
+	groupQuery := database.DB.Preload("CreatedBy")
+	if creatorRole == "Mentor" {
+		groupQuery = groupQuery.Where("created_by_id = ?", userID)
 	}
+	groupQuery.Find(&groups)
 
-	groupIDs := make([]uint, 0, len(groups))
-	groupIDSet := make(map[uint]bool)
+	// Build map of allowed group IDs for mentors
+	allowedGroupIDs := make(map[uint]bool)
 	for _, g := range groups {
-		groupIDs = append(groupIDs, g.ID)
-		groupIDSet[g.ID] = true
+		allowedGroupIDs[g.ID] = true
 	}
 
-	// 2. Fetch students (STRICTLY role = 'Student')
-	var students []models.User
-	query := database.DB.Preload("StudentGroup").Where("role = ?", "Student")
-
-	if requesterRole == "Mentor" {
-		if len(groupIDs) > 0 {
-			query = query.Where("student_group_id IN ?", groupIDs)
-		} else {
-			// Mentor has no groups yet, so no students returned
-			query = query.Where("1 = 0")
-		}
-	}
-	if err := query.Find(&students).Error; err != nil {
+	// 2. Fetch students with group information (Strictly role = 'Student')
+	var allStudents []models.User
+	if err := database.DB.Preload("StudentGroup").Where("role = ?", "Student").Find(&allStudents).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch student data"})
 		return
 	}
 
-	studentIDSet := make(map[uint]bool)
-	studentUserMap := make(map[uint]models.User)
-	for _, s := range students {
-		studentIDSet[s.ID] = true
-		studentUserMap[s.ID] = s
+	// Filter students if Mentor role (only students belonging to mentor's groups)
+	var students []models.User
+	if creatorRole == "Mentor" {
+		for _, s := range allStudents {
+			if s.StudentGroupID != nil && allowedGroupIDs[*s.StudentGroupID] {
+				students = append(students, s)
+			}
+		}
+	} else {
+		students = allStudents
 	}
 
-	// 3. Fetch submissions strictly for these students
+	// 3. Fetch submissions for student metrics
 	var submissions []models.Submission
-	if len(studentIDSet) > 0 {
-		studentIDs := make([]uint, 0, len(studentIDSet))
-		for id := range studentIDSet {
-			studentIDs = append(studentIDs, id)
-		}
-		database.DB.Where("user_id IN ?", studentIDs).Find(&submissions)
-	}
+	database.DB.Find(&submissions)
 
 	// Fetch stage questions and exercises for activity title lookup
 	var stageQuestions []models.StageQuestion
@@ -135,11 +106,13 @@ func GetMentorAnalytics(c *gin.Context) {
 		exMap[ex.ID] = ex.Title
 	}
 
-	totalStudents := len(students)
-	totalSubmissions := len(submissions)
-	passedSubmissionsCount := 0
+	// Track allowed student IDs
+	studentMap := make(map[uint]models.User)
+	for _, s := range students {
+		studentMap[s.ID] = s
+	}
 
-	// Track per-student metrics
+	// Per-student metrics
 	type userStat struct {
 		totalSubmissions   int
 		passedSubmissions  int
@@ -151,7 +124,16 @@ func GetMentorAnalytics(c *gin.Context) {
 	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
 	activeStudentsMap := make(map[uint]bool)
 
+	totalSubmissions := 0
+	passedSubmissionsCount := 0
+
 	for _, s := range submissions {
+		// Only aggregate submissions belonging to students in mentor's scope
+		if _, exists := studentMap[s.UserID]; !exists {
+			continue
+		}
+
+		totalSubmissions++
 		if s.Status == "Passed" {
 			passedSubmissionsCount++
 		}
@@ -177,103 +159,29 @@ func GetMentorAnalytics(c *gin.Context) {
 			st.lastActive = &t
 		}
 
-		if studentIDSet[s.UserID] && s.CreatedAt.After(sevenDaysAgo) {
+		if s.CreatedAt.After(sevenDaysAgo) {
 			activeStudentsMap[s.UserID] = true
 		}
 	}
 
-	activeStudentsCount := len(activeStudentsMap)
-	if activeStudentsCount > totalStudents {
-		activeStudentsCount = totalStudents
-	}
-
-	// Overall Pass Rate for students
+	// Calculate Overall Pass Rate
 	overallPassRate := 0.0
 	if totalSubmissions > 0 {
 		overallPassRate = math.Round((float64(passedSubmissionsCount)/float64(totalSubmissions))*1000) / 10
 	}
 
-	// Aggregates per group
+	// 4. Build Student Roster Analytics
+	studentRoster := make([]StudentAnalyticsItem, 0, len(students))
 	groupXPMap := make(map[uint]int)
 	groupStudentCountMap := make(map[uint]int)
 	groupPassedCountMap := make(map[uint]int)
-	groupTotalSubmissionsMap := make(map[uint]int)
-	groupPassedSubmissionsMap := make(map[uint]int)
 
-	for _, s := range students {
-		if s.StudentGroupID != nil && groupIDSet[*s.StudentGroupID] {
-			gid := *s.StudentGroupID
-			groupXPMap[gid] += s.XP
-			groupStudentCountMap[gid]++
-
-			st := userStatsMap[s.ID]
-			if st != nil {
-				groupPassedCountMap[gid] += len(st.passedQuestionsMap)
-				groupTotalSubmissionsMap[gid] += st.totalSubmissions
-				groupPassedSubmissionsMap[gid] += st.passedSubmissions
-			}
-		}
-	}
-
-	// 4. Build Group Analytics List
-	groupAnalyticsList := make([]GroupAnalyticsItem, 0, len(groups))
-	groupAvgXPMap := make(map[uint]float64)
-	groupAvgPassedMap := make(map[uint]float64)
-
-	for _, g := range groups {
-		cnt := groupStudentCountMap[g.ID]
-		avgXP := 0.0
-		avgPassed := 0.0
-		passRate := 0.0
-
-		if cnt > 0 {
-			avgXP = math.Round((float64(groupXPMap[g.ID])/float64(cnt))*10) / 10
-			avgPassed = math.Round((float64(groupPassedCountMap[g.ID])/float64(cnt))*10) / 10
-		}
-		if groupTotalSubmissionsMap[g.ID] > 0 {
-			passRate = math.Round((float64(groupPassedSubmissionsMap[g.ID])/float64(groupTotalSubmissionsMap[g.ID]))*1000) / 10
-		}
-
-		groupAvgXPMap[g.ID] = avgXP
-		groupAvgPassedMap[g.ID] = avgPassed
-
-		createdByName := "System Admin"
-		if g.CreatedBy != nil {
-			if g.CreatedBy.FullName != "" {
-				createdByName = g.CreatedBy.FullName
-			} else {
-				createdByName = g.CreatedBy.Username
-			}
-		}
-
-		groupAnalyticsList = append(groupAnalyticsList, GroupAnalyticsItem{
-			ID:                   g.ID,
-			SchoolName:           g.SchoolName,
-			Class:                g.Class,
-			AcademicYear:         g.AcademicYear,
-			Name:                 fmt.Sprintf("%s - %s", g.SchoolName, g.Class),
-			CreatedByName:        createdByName,
-			CreatedByUserID:      g.CreatedByUserID,
-			StudentCount:         cnt,
-			AverageXP:            avgXP,
-			TotalPassedQuestions: groupPassedCountMap[g.ID],
-			AveragePassRate:      passRate,
-		})
-	}
-
-	// 5. Build Student Roster Analytics
-	studentRoster := make([]StudentAnalyticsItem, 0, len(students))
 	for _, s := range students {
 		groupName := "Unassigned"
-		var gID *uint
-		var gAvgXP float64 = 0.0
-		var gAvgPassed float64 = 0.0
-
 		if s.StudentGroupID != nil && s.StudentGroup != nil {
-			gID = s.StudentGroupID
-			groupName = fmt.Sprintf("%s - %s", s.StudentGroup.SchoolName, s.StudentGroup.Class)
-			gAvgXP = groupAvgXPMap[*s.StudentGroupID]
-			gAvgPassed = groupAvgPassedMap[*s.StudentGroupID]
+			groupName = s.StudentGroup.SchoolName + " - " + s.StudentGroup.Class
+			groupXPMap[*s.StudentGroupID] += s.XP
+			groupStudentCountMap[*s.StudentGroupID]++
 		}
 
 		st := userStatsMap[s.ID]
@@ -294,13 +202,16 @@ func GetMentorAnalytics(c *gin.Context) {
 			successRate = math.Round((float64(passSub)/float64(totalSub))*1000) / 10
 		}
 
+		if s.StudentGroupID != nil {
+			groupPassedCountMap[*s.StudentGroupID] += passedQCount
+		}
+
 		studentRoster = append(studentRoster, StudentAnalyticsItem{
 			ID:               s.ID,
 			Username:         s.Username,
 			FullName:         s.FullName,
 			Email:            s.Email,
 			Avatar:           s.Avatar,
-			GroupID:          gID,
 			GroupName:        groupName,
 			XP:               s.XP,
 			Level:            s.Level,
@@ -309,24 +220,40 @@ func GetMentorAnalytics(c *gin.Context) {
 			TotalSubmissions: totalSub,
 			SuccessRate:      successRate,
 			LastActive:       lastAct,
-			GroupAvgXP:       gAvgXP,
-			GroupAvgPassed:   gAvgPassed,
 		})
 	}
 
-	// 6. Build Recent Activity Feed
-	var recentSubs []models.Submission
-	if len(studentIDSet) > 0 {
-		studentIDs := make([]uint, 0, len(studentIDSet))
-		for id := range studentIDSet {
-			studentIDs = append(studentIDs, id)
+	// 5. Build Group Analytics
+	groupAnalyticsList := make([]GroupAnalyticsItem, 0, len(groups))
+	for _, g := range groups {
+		cnt := groupStudentCountMap[g.ID]
+		avgXP := 0.0
+		if cnt > 0 {
+			avgXP = math.Round((float64(groupXPMap[g.ID])/float64(cnt))*10) / 10
 		}
-		database.DB.Where("user_id IN ?", studentIDs).Order("created_at desc").Limit(15).Find(&recentSubs)
+		groupAnalyticsList = append(groupAnalyticsList, GroupAnalyticsItem{
+			ID:           g.ID,
+			Name:         g.SchoolName + " - " + g.Class,
+			StudentCount: cnt,
+			AverageXP:    avgXP,
+			PassedCount:  groupPassedCountMap[g.ID],
+		})
 	}
 
-	activityFeed := make([]RecentActivityItem, 0, len(recentSubs))
+	// 6. Build Recent Activity Stream (Latest 15 submissions)
+	var recentSubs []models.Submission
+	database.DB.Order("created_at desc").Limit(30).Find(&recentSubs)
+
+	activityFeed := make([]RecentActivityItem, 0)
 	for _, sub := range recentSubs {
-		u := studentUserMap[sub.UserID]
+		u, ok := studentMap[sub.UserID]
+		if !ok {
+			continue // Skip if student not in mentor's scope
+		}
+		if len(activityFeed) >= 15 {
+			break
+		}
+
 		title := "Coding Exercise"
 		if sub.StageQuestionID != nil && sqMap[*sub.StageQuestionID] != "" {
 			title = sqMap[*sub.StageQuestionID]
@@ -346,12 +273,101 @@ func GetMentorAnalytics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"total_students":    totalStudents,
-		"active_students":   activeStudentsCount,
+		"total_students":    len(students),
+		"active_students":   len(activeStudentsMap),
 		"total_submissions": totalSubmissions,
 		"overall_pass_rate": overallPassRate,
 		"groups":            groupAnalyticsList,
 		"students":          studentRoster,
 		"activity_feed":     activityFeed,
+	})
+}
+
+// GetStudentGroupComparison provides peer rank and group statistics for a student
+func GetStudentGroupComparison(c *gin.Context) {
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userID := userIDVal.(uint)
+
+	var me models.User
+	if err := database.DB.Preload("StudentGroup").First(&me, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if me.StudentGroupID == nil || *me.StudentGroupID == 0 {
+		c.JSON(http.StatusOK, gin.H{"in_group": false})
+		return
+	}
+
+	var groupPeers []models.User
+	database.DB.Where("student_group_id = ? AND role = ?", *me.StudentGroupID, "Student").Order("xp desc").Find(&groupPeers)
+
+	// Calculate group average XP and student rank
+	totalXP := 0
+	myRank := 1
+	type PeerItem struct {
+		ID              uint   `json:"id"`
+		Username        string `json:"username"`
+		FullName        string `json:"full_name"`
+		Avatar          string `json:"avatar"`
+		XP              int    `json:"xp"`
+		Level           int    `json:"level"`
+		PassedQuestions int    `json:"passed_questions"`
+		IsMe            bool   `json:"is_me"`
+	}
+
+	// Fetch passed questions for each peer
+	var passedSubmissions []models.Submission
+	database.DB.Where("status = ?", "Passed").Find(&passedSubmissions)
+	userPassedMap := make(map[uint]map[uint]bool)
+	for _, sub := range passedSubmissions {
+		if sub.StageQuestionID != nil {
+			if userPassedMap[sub.UserID] == nil {
+				userPassedMap[sub.UserID] = make(map[uint]bool)
+			}
+			userPassedMap[sub.UserID][*sub.StageQuestionID] = true
+		}
+	}
+
+	peerList := make([]PeerItem, 0, len(groupPeers))
+	for idx, peer := range groupPeers {
+		totalXP += peer.XP
+		if peer.ID == me.ID {
+			myRank = idx + 1
+		}
+		passedQCount := len(userPassedMap[peer.ID])
+		peerList = append(peerList, PeerItem{
+			ID:              peer.ID,
+			Username:        peer.Username,
+			FullName:        peer.FullName,
+			Avatar:          peer.Avatar,
+			XP:              peer.XP,
+			Level:           peer.Level,
+			PassedQuestions: passedQCount,
+			IsMe:            peer.ID == me.ID,
+		})
+	}
+
+	avgXP := 0.0
+	if len(groupPeers) > 0 {
+		avgXP = math.Round((float64(totalXP)/float64(len(groupPeers)))*10) / 10
+	}
+
+	groupName := me.StudentGroup.SchoolName + " - " + me.StudentGroup.Class
+
+	c.JSON(http.StatusOK, gin.H{
+		"in_group":       true,
+		"group_id":       me.StudentGroupID,
+		"group_name":     groupName,
+		"my_rank":        myRank,
+		"total_students": len(groupPeers),
+		"my_xp":          me.XP,
+		"group_avg_xp":   avgXP,
+		"peers":          peerList,
 	})
 }

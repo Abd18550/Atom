@@ -198,24 +198,9 @@ const roleLabel = computed(() => {
           </div>
           <div class="relative z-10 ml-5">
             <p class="text-base font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Mentor Panel</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage students</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage groups & student performance</p>
           </div>
           <div class="relative z-10 ml-auto text-slate-300 dark:text-slate-600 group-hover:text-blue-500 group-hover:translate-x-1 transition-all mr-1">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-          </div>
-        </router-link>
-
-        <!-- Student Groups -->
-        <router-link to="/groups" class="group flex items-center p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden relative">
-          <div class="absolute right-0 top-0 w-24 h-24 bg-teal-50 dark:bg-teal-500/10 rounded-bl-full z-0 transition-transform group-hover:scale-125"></div>
-          <div class="relative z-10 bg-gradient-to-br from-teal-500 to-teal-600 dark:from-teal-600 dark:to-teal-700 text-white p-3.5 rounded-xl shadow-md group-hover:shadow-teal-200 dark:group-hover:shadow-teal-900/50 group-hover:scale-110 transition-all">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-          </div>
-          <div class="relative z-10 ml-5">
-            <p class="text-base font-bold text-slate-800 dark:text-slate-200 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">Student Groups</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage classes</p>
-          </div>
-          <div class="relative z-10 ml-auto text-slate-300 dark:text-slate-600 group-hover:text-teal-500 group-hover:translate-x-1 transition-all mr-1">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
           </div>
         </router-link>

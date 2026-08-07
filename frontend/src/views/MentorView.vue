@@ -6,54 +6,50 @@ import { API_BASE_URL } from '../config.js'
 import AlertModal from '../components/AlertModal.vue'
 
 const router = useRouter()
+const currentUser = ref(JSON.parse(localStorage.getItem('user') || '{}'))
+
 const analytics = ref(null)
+const groupsList = ref([])
 const loading = ref(true)
 const error = ref('')
-
-const activeTab = ref('roster') // 'roster', 'group_comparison', 'manage_groups'
 
 const searchQuery = ref('')
 const selectedGroupFilter = ref('ALL')
 const sortBy = ref('xp_desc')
 
-const currentUser = ref(null)
-
-// Group Modal State
-const showGroupModal = ref(false)
+// Modals state
+const showCreateGroupModal = ref(false)
 const isEditingGroup = ref(false)
-const currentGroupId = ref(null)
-const groupForm = ref({
-  school_name: '',
-  class: '',
-  academic_year: ''
-})
+const editingGroupId = ref(null)
+const groupForm = ref({ school_name: '', class: '', academic_year: '' })
 
-// Student Detail Modal
-const showStudentModal = ref(false)
-const selectedStudent = ref(null)
+const showManageRosterModal = ref(false)
+const activeGroupForRoster = ref(null)
+const rosterSearch = ref('')
 
-// Delete Confirm Modal State
 const showDeleteConfirm = ref(false)
-const itemToDelete = ref(null) // { type: 'student'|'group', data: object }
+const userToDelete = ref(null)
+const groupToDelete = ref(null)
 const alertState = ref({ show: false, message: '' })
+
+// Active chart tab ('students' or 'groups')
+const activeChartTab = ref('groups')
+const selectedChartGroup = ref('ALL')
 
 onMounted(async () => {
   const token = localStorage.getItem('token')
-  const userStr = localStorage.getItem('user')
-  
-  if (!token || !userStr) {
+  if (!token) {
     router.push('/login')
     return
   }
 
-  currentUser.value = JSON.parse(userStr)
   if (currentUser.value.role !== 'Mentor' && currentUser.value.role !== 'Supervisor' && currentUser.value.role !== 'Admin') {
     router.push('/welcome')
     return
   }
 
   axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-  await fetchAnalytics()
+  await Promise.all([fetchAnalytics(), fetchGroups()])
 })
 
 const fetchAnalytics = async () => {
@@ -63,9 +59,18 @@ const fetchAnalytics = async () => {
     const res = await axios.get(`${API_BASE_URL}/api/mentor/analytics`)
     analytics.value = res.data
   } catch (err) {
-    error.value = err.response?.data?.error || 'Failed to load mentor analytics. Please try again.'
+    error.value = 'Failed to load mentor analytics. Please try again.'
   } finally {
     loading.value = false
+  }
+}
+
+const fetchGroups = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/groups`)
+    groupsList.value = res.data
+  } catch (err) {
+    console.error('Failed to load groups list:', err)
   }
 }
 
@@ -92,35 +97,33 @@ const filteredStudents = computed(() => {
   })
 })
 
-// Active group statistics for selected group in comparison view
-const selectedGroupObj = computed(() => {
-  if (!analytics.value || !analytics.value.groups) return null
-  if (selectedGroupFilter.value === 'ALL') return null
-  return analytics.value.groups.find(g => g.name === selectedGroupFilter.value) || null
+// Data for Group vs Group Comparison Chart
+const groupComparisonData = computed(() => {
+  if (!analytics.value || !analytics.value.groups) return []
+  const maxXP = Math.max(...analytics.value.groups.map(g => g.average_xp), 100)
+  return analytics.value.groups.map(g => ({
+    ...g,
+    xpPercent: Math.min(100, Math.round((g.average_xp / maxXP) * 100))
+  }))
 })
 
-// Students in currently selected group for comparison chart
-const studentsInSelectedGroup = computed(() => {
+// Data for Student Comparison Chart
+const studentChartData = computed(() => {
   if (!analytics.value || !analytics.value.students) return []
-  if (selectedGroupFilter.value === 'ALL') return analytics.value.students
-  return analytics.value.students.filter(s => s.group_name === selectedGroupFilter.value)
-})
-
-// Max XP across groups for responsive chart scaling
-const maxGroupXP = computed(() => {
-  if (!analytics.value || !analytics.value.groups || analytics.value.groups.length === 0) return 100
-  const max = Math.max(...analytics.value.groups.map(g => g.average_xp))
-  return max > 0 ? max : 100
-})
-
-const maxStudentXPInGroup = computed(() => {
-  if (studentsInSelectedGroup.value.length === 0) return 100
-  const max = Math.max(...studentsInSelectedGroup.value.map(s => s.xp))
-  return max > 0 ? max : 100
+  let list = analytics.value.students
+  if (selectedChartGroup.value !== 'ALL') {
+    list = list.filter(s => s.group_name === selectedChartGroup.value)
+  }
+  const sorted = [...list].sort((a, b) => b.xp - a.xp).slice(0, 10)
+  const maxXP = Math.max(...sorted.map(s => s.xp), 100)
+  return sorted.map(s => ({
+    ...s,
+    xpPercent: Math.min(100, Math.round((s.xp / maxXP) * 100))
+  }))
 })
 
 const formatRelativeTime = (dateStr) => {
-  if (!dateStr) return 'Never'
+  if (!dateStr) return 'Inactive'
   const date = new Date(dateStr)
   const now = new Date()
   const diffInSeconds = Math.floor((now - date) / 1000)
@@ -131,87 +134,95 @@ const formatRelativeTime = (dateStr) => {
   return `${Math.floor(diffInSeconds / 86400)}d ago`
 }
 
-// Group Modal Handlers
+// Group Creation & Editing
 const openCreateGroupModal = () => {
   isEditingGroup.value = false
-  currentGroupId.value = null
-  groupForm.value = { school_name: '', class: '', academic_year: '' }
-  showGroupModal.value = true
+  editingGroupId.value = null
+  groupForm.value = { school_name: '', class: '', academic_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}` }
+  showCreateGroupModal.value = true
 }
 
-const openEditGroupModal = (group) => {
+const openEditGroupModal = (g) => {
   isEditingGroup.value = true
-  currentGroupId.value = group.id
-  groupForm.value = {
-    school_name: group.school_name,
-    class: group.class,
-    academic_year: group.academic_year
-  }
-  showGroupModal.value = true
+  editingGroupId.value = g.id
+  groupForm.value = { school_name: g.school_name || g.name.split(' - ')[0] || '', class: g.class || g.name.split(' - ')[1] || '', academic_year: g.academic_year || '2025-2026' }
+  showCreateGroupModal.value = true
 }
 
-const saveGroup = async () => {
-  if (!groupForm.value.school_name.trim() || !groupForm.value.class.trim() || !groupForm.value.academic_year.trim()) return
-
+const handleGroupSubmit = async () => {
   try {
     if (isEditingGroup.value) {
-      await axios.put(`${API_BASE_URL}/api/groups/${currentGroupId.value}`, groupForm.value)
+      await axios.put(`${API_BASE_URL}/api/groups/${editingGroupId.value}`, groupForm.value)
     } else {
       await axios.post(`${API_BASE_URL}/api/groups`, groupForm.value)
     }
-    showGroupModal.value = false
-    await fetchAnalytics()
+    showCreateGroupModal.value = false
+    await Promise.all([fetchAnalytics(), fetchGroups()])
   } catch (err) {
     alertState.value = { show: true, message: err.response?.data?.error || 'Failed to save group' }
   }
 }
 
-// Student Detail View
-const openStudentDetail = (student) => {
-  selectedStudent.value = student
-  showStudentModal.value = true
-}
-
-// Deletion Handlers
-const confirmDeleteStudent = (student) => {
-  itemToDelete.value = { type: 'student', data: student }
+const confirmDeleteGroup = (g) => {
+  groupToDelete.value = g
   showDeleteConfirm.value = true
 }
 
-const confirmDeleteGroup = (group) => {
-  itemToDelete.value = { type: 'group', data: group }
-  showDeleteConfirm.value = true
-}
-
-const cancelDelete = () => {
-  showDeleteConfirm.value = false
-  itemToDelete.value = null
-}
-
-const executeDelete = async () => {
-  if (!itemToDelete.value) return
-  
+const executeGroupDelete = async () => {
+  if (!groupToDelete.value) return
   try {
-    if (itemToDelete.value.type === 'student') {
-      await axios.delete(`${API_BASE_URL}/api/users/${itemToDelete.value.data.id}`)
-      if (showStudentModal.value && selectedStudent.value?.id === itemToDelete.value.data.id) {
-        showStudentModal.value = false
-      }
-    } else if (itemToDelete.value.type === 'group') {
-      await axios.delete(`${API_BASE_URL}/api/groups/${itemToDelete.value.data.id}`)
-    }
-    await fetchAnalytics()
+    await axios.delete(`${API_BASE_URL}/api/groups/${groupToDelete.value.id}`)
+    showDeleteConfirm.value = false
+    groupToDelete.value = null
+    await Promise.all([fetchAnalytics(), fetchGroups()])
   } catch (err) {
-    alertState.value = { show: true, message: err.response?.data?.error || 'Failed to delete item' }
-  } finally {
-    cancelDelete()
+    alertState.value = { show: true, message: err.response?.data?.error || 'Failed to delete group' }
   }
 }
 
-const canManageGroup = (group) => {
-  if (!currentUser.value) return false
-  if (currentUser.value.role === 'Admin' || currentUser.value.role === 'Supervisor') return true
-  return group.created_by_user_id === currentUser.value.id
+// Roster Management Modal
+const openManageRosterModal = (g) => {
+  activeGroupForRoster.value = g
+  showManageRosterModal.value = true
+}
+
+const groupStudents = computed(() => {
+  if (!activeGroupForRoster.value || !analytics.value?.students) return []
+  return analytics.value.students.filter(s => s.group_name === activeGroupForRoster.value.name)
+})
+
+const unassignedStudents = computed(() => {
+  if (!analytics.value?.students) return []
+  return analytics.value.students.filter(s => s.group_name === 'Unassigned' || !s.group_name)
+})
+
+const assignStudent = async (studentId, groupId) => {
+  try {
+    await axios.post(`${API_BASE_URL}/api/groups/assign-student`, {
+      user_id: studentId,
+      student_group_id: groupId
+    })
+    await fetchAnalytics()
+  } catch (err) {
+    alertState.value = { show: true, message: err.response?.data?.error || 'Failed to update student assignment' }
+  }
+}
+
+const confirmDeleteUser = (u) => {
+  userToDelete.value = u
+  showDeleteConfirm.value = true
+}
+
+const executeUserDelete = async () => {
+  if (!userToDelete.value) return
+  try {
+    await axios.delete(`${API_BASE_URL}/api/users/${userToDelete.value.id}`)
+    showDeleteConfirm.value = false
+    userToDelete.value = null
+    await fetchAnalytics()
+  } catch (err) {
+    alertState.value = { show: true, message: err.response?.data?.error || 'Failed to delete user account' }
+  }
 }
 </script>
 
@@ -220,33 +231,31 @@ const canManageGroup = (group) => {
     
     <!-- Page Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-800/60 backdrop-blur-xl p-6 rounded-3xl border border-slate-700/60 shadow-xl">
-      <div>
-        <div class="flex items-center gap-3">
-          <div class="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/30">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-            </svg>
-          </div>
-          <div>
-            <h1 class="text-3xl font-black tracking-tight text-white">Mentor Analytics & Group Control</h1>
-            <p class="text-slate-400 text-sm mt-0.5">Track student metrics, group performance, and manage assigned cohorts</p>
-          </div>
+      <div class="flex items-center gap-3">
+        <div class="p-3 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/30">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-3xl font-black tracking-tight text-white">Mentor Command Center</h1>
+          <p class="text-slate-400 text-sm mt-0.5">Track student progress, manage assigned groups, and analyze live coding metrics</p>
         </div>
       </div>
 
       <div class="flex items-center gap-3">
         <button 
           @click="openCreateGroupModal"
-          class="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2.5 px-5 rounded-2xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 cursor-pointer text-sm"
+          class="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2.5 px-5 rounded-2xl shadow-lg shadow-indigo-500/25 transition-all active:scale-95 cursor-pointer"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
-          <span>Create New Group</span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          <span>Create Group</span>
         </button>
 
         <button 
           @click="fetchAnalytics" 
           :disabled="loading"
-          class="flex items-center gap-2 bg-slate-700/80 hover:bg-slate-600/80 text-white font-bold py-2.5 px-4 rounded-2xl border border-slate-600/60 shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer text-sm"
+          class="flex items-center gap-2 bg-slate-700/80 hover:bg-slate-600/80 text-white font-bold py-2.5 px-4 rounded-2xl border border-slate-600/60 shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
         >
           <svg :class="{ 'animate-spin': loading }" class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -256,671 +265,580 @@ const canManageGroup = (group) => {
       </div>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div class="flex border-b border-slate-700/60 gap-4">
-      <button 
-        @click="activeTab = 'roster'"
-        :class="['pb-3 px-4 font-bold text-sm transition-colors border-b-2 cursor-pointer', activeTab === 'roster' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200']"
-      >
-        Student Roster & Activity
-      </button>
-      <button 
-        @click="activeTab = 'group_comparison'"
-        :class="['pb-3 px-4 font-bold text-sm transition-colors border-b-2 cursor-pointer', activeTab === 'group_comparison' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200']"
-      >
-        Group Comparison & Charts
-      </button>
-      <button 
-        @click="activeTab = 'manage_groups'"
-        :class="['pb-3 px-4 font-bold text-sm transition-colors border-b-2 cursor-pointer', activeTab === 'manage_groups' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200']"
-      >
-        Group Management
-      </button>
-    </div>
-
     <!-- Loading State -->
     <div v-if="loading && !analytics" class="p-16 text-center">
       <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mb-4"></div>
-      <p class="text-slate-400 font-medium">Loading mentor dashboard...</p>
+      <p class="text-slate-400 font-medium">Loading mentor dashboard metrics...</p>
     </div>
 
     <!-- Error State -->
-    <div v-else-if="error" class="bg-red-500/10 border border-red-500/30 p-6 rounded-2xl text-center text-red-400">
+    <div v-else-if="error" class="p-6 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-center text-rose-400">
       {{ error }}
     </div>
 
-    <!-- Dashboard Content -->
     <template v-else-if="analytics">
       
-      <!-- Top KPI Cards (STRICTLY STUDENT-ONLY STATS) -->
+      <!-- Key Metric Cards (STUDENTS ONLY) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        <!-- Total Students Card -->
-        <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-indigo-500/40 transition-all">
-          <div class="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">Total Students</span>
-            <div class="p-2.5 rounded-2xl bg-indigo-500/20 text-indigo-400">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-            </div>
-          </div>
-          <div class="text-4xl font-black text-white tracking-tight">{{ analytics.total_students }}</div>
-          <div class="text-xs text-slate-400 mt-2 font-medium">Students enrolled (excluding mentors)</div>
-        </div>
-
-        <!-- Active Students Card -->
-        <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-          <div class="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">Active Students (7d)</span>
-            <div class="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-400">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-            </div>
-          </div>
-          <div class="text-4xl font-black text-white tracking-tight">{{ analytics.active_students }}</div>
-          <div class="text-xs text-emerald-400 mt-2 font-medium">
-            {{ analytics.total_students > 0 ? Math.min(Math.round((analytics.active_students / analytics.total_students) * 100), 100) : 0 }}% Weekly engagement
-          </div>
-        </div>
-
-        <!-- Total Submissions Card -->
-        <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-all">
-          <div class="absolute -right-4 -top-4 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all"></div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">Code Submissions</span>
-            <div class="p-2.5 rounded-2xl bg-purple-500/20 text-purple-400">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-            </div>
-          </div>
-          <div class="text-4xl font-black text-white tracking-tight">{{ analytics.total_submissions }}</div>
-          <div class="text-xs text-slate-400 mt-2 font-medium">Executions by students</div>
-        </div>
-
-        <!-- Overall Pass Rate Card -->
-        <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-teal-500/40 transition-all">
-          <div class="absolute -right-4 -top-4 w-24 h-24 bg-teal-500/10 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-all"></div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">Accuracy Rate</span>
-            <div class="p-2.5 rounded-2xl bg-teal-500/20 text-teal-400">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-          </div>
-          <div class="text-4xl font-black text-white tracking-tight">{{ analytics.overall_pass_rate }}%</div>
-          <div class="text-xs text-teal-400 mt-2 font-medium">Average solution accuracy</div>
-        </div>
-
-      </div>
-
-      <!-- TAB 1: STUDENT ROSTER & ACTIVITY -->
-      <div v-if="activeTab === 'roster'" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        <!-- Left 2 Columns: Student Roster Table -->
-        <div class="lg:col-span-2 space-y-5">
-          
-          <!-- Controls Bar -->
-          <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-5 rounded-3xl shadow-lg flex flex-col sm:flex-row gap-4 justify-between items-center">
-            
-            <!-- Search Input -->
-            <div class="relative w-full sm:w-72">
-              <input 
-                v-model="searchQuery" 
-                type="text" 
-                placeholder="Search student name or email..."
-                class="w-full bg-slate-900/90 border border-slate-700/80 text-white rounded-2xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-              <svg class="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-              <!-- Group Filter Dropdown -->
-              <select 
-                v-model="selectedGroupFilter"
-                class="bg-slate-900/90 border border-slate-700/80 text-slate-200 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 font-medium"
-              >
-                <option value="ALL">All Groups</option>
-                <option v-for="g in analytics.groups" :key="g.id" :value="g.name">{{ g.name }}</option>
-              </select>
-
-              <!-- Sort Dropdown -->
-              <select 
-                v-model="sortBy"
-                class="bg-slate-900/90 border border-slate-700/80 text-slate-200 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 font-medium"
-              >
-                <option value="xp_desc">Sort: Highest XP</option>
-                <option value="passed_desc">Sort: Questions Solved</option>
-                <option value="rate_desc">Sort: Success Rate</option>
-              </select>
-            </div>
-
-          </div>
-
-          <!-- Students Table Card -->
-          <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 rounded-3xl shadow-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-700/60 flex items-center justify-between">
-              <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                <span>Student Performance Roster</span>
-                <span class="bg-indigo-500/20 text-indigo-400 text-xs font-black px-2.5 py-0.5 rounded-full">
-                  {{ filteredStudents.length }}
-                </span>
-              </h3>
-            </div>
-
-            <div class="overflow-x-auto">
-              <table class="w-full text-left border-collapse">
-                <thead>
-                  <tr class="bg-slate-900/50 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700/60">
-                    <th class="px-6 py-4">Student</th>
-                    <th class="px-6 py-4">Group</th>
-                    <th class="px-6 py-4">Level & XP</th>
-                    <th class="px-6 py-4">Solved</th>
-                    <th class="px-6 py-4">Accuracy</th>
-                    <th class="px-6 py-4">Last Active</th>
-                    <th class="px-6 py-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-700/40 text-sm">
-                  <tr v-for="s in filteredStudents" :key="s.id" class="hover:bg-slate-700/30 transition-colors">
-                    
-                    <!-- Student Info -->
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="flex items-center gap-3 cursor-pointer" @click="openStudentDetail(s)">
-                        <div class="w-10 h-10 rounded-2xl bg-indigo-900/40 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400 overflow-hidden shrink-0">
-                          <img v-if="s.avatar" :src="'https://api.dicebear.com/7.x/bottts/svg?seed=' + s.avatar" class="w-full h-full object-cover bg-slate-900" />
-                          <span v-else>{{ s.full_name ? s.full_name.charAt(0) : 'S' }}</span>
-                        </div>
-                        <div>
-                          <div class="font-bold text-white hover:text-indigo-400 transition-colors">{{ s.full_name }}</div>
-                          <div class="text-xs text-slate-400">@{{ s.username }}</div>
-                        </div>
-                      </div>
-                    </td>
-
-                    <!-- Group Name -->
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold bg-slate-700/60 text-slate-300 border border-slate-600/50">
-                        {{ s.group_name }}
-                      </span>
-                    </td>
-
-                    <!-- Level & XP -->
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="flex flex-col">
-                        <div class="flex items-center gap-2">
-                          <span class="text-xs font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20">
-                            Lvl {{ s.level }}
-                          </span>
-                          <span class="text-xs font-semibold text-slate-300">{{ s.level_title }}</span>
-                        </div>
-                        <div class="text-xs text-indigo-400 font-mono font-bold mt-1">
-                          {{ s.xp }} XP
-                        </div>
-                      </div>
-                    </td>
-
-                    <!-- Solved Questions -->
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="font-mono font-bold text-emerald-400 text-base">
-                        {{ s.passed_questions }}
-                      </span>
-                      <span class="text-slate-500 text-xs ml-1">tasks</span>
-                    </td>
-
-                    <!-- Success Rate -->
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="flex items-center gap-2">
-                        <div class="w-16 bg-slate-700 rounded-full h-2 overflow-hidden">
-                          <div 
-                            class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full"
-                            :style="{ width: Math.min(s.success_rate, 100) + '%' }"
-                          ></div>
-                        </div>
-                        <span class="font-mono text-xs font-bold text-slate-300">{{ s.success_rate }}%</span>
-                      </div>
-                    </td>
-
-                    <!-- Last Active -->
-                    <td class="px-6 py-4 whitespace-nowrap text-xs text-slate-400 font-medium">
-                      {{ formatRelativeTime(s.last_active) }}
-                    </td>
-
-                    <!-- Actions -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
-                      <div class="flex items-center justify-center gap-1">
-                        <button 
-                          @click="openStudentDetail(s)"
-                          class="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-xl transition-all cursor-pointer"
-                          title="View Performance Analytics"
-                        >
-                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                        </button>
-                        <button 
-                          @click="confirmDeleteStudent(s)" 
-                          class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
-                          title="Delete Student Account"
-                        >
-                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                      </div>
-                    </td>
-
-                  </tr>
-                </tbody>
-              </table>
-
-              <div v-if="filteredStudents.length === 0" class="p-8 text-center text-slate-400 text-sm">
-                No students match the selected filter.
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-
-        <!-- Right 1 Column: Group Overview & Activity Stream -->
-        <div class="space-y-6">
-          
-          <!-- Groups Overview Card -->
-          <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-bold text-white">Your Student Groups</h3>
-              <span class="text-xs text-slate-400 font-normal">Total: {{ analytics.groups.length }}</span>
-            </div>
-
-            <div class="space-y-3">
-              <div 
-                v-for="g in analytics.groups" 
-                :key="g.id"
-                @click="selectedGroupFilter = (selectedGroupFilter === g.name ? 'ALL' : g.name)"
-                :class="{
-                  'p-4 rounded-2xl border transition-all cursor-pointer': true,
-                  'bg-indigo-500/10 border-indigo-500/50 shadow-md': selectedGroupFilter === g.name,
-                  'bg-slate-900/60 border-slate-700/60 hover:border-slate-600': selectedGroupFilter !== g.name
-                }"
-              >
-                <div class="flex items-center justify-between mb-2">
-                  <div class="font-bold text-white text-sm">{{ g.name }}</div>
-                  <span class="text-xs bg-slate-700/80 text-slate-300 font-bold px-2 py-0.5 rounded-lg">
-                    {{ g.student_count }} students
-                  </span>
-                </div>
-
-                <div class="flex items-center justify-between text-xs text-slate-400">
-                  <span>Avg XP: <b class="text-amber-400 font-mono">{{ g.average_xp }} XP</b></span>
-                  <span>Tasks Solved: <b class="text-emerald-400 font-mono">{{ g.total_passed_questions }}</b></span>
-                </div>
-              </div>
-
-              <div v-if="analytics.groups.length === 0" class="text-xs text-slate-500 text-center py-4">
-                No groups created yet. Click "Create New Group" to get started.
-              </div>
-            </div>
-          </div>
-
-          <!-- Live Activity Stream Widget -->
-          <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl">
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>Live Submission Activity</span>
-            </h3>
-
-            <div class="space-y-3 max-h-96 overflow-y-auto pr-1">
-              <div 
-                v-for="act in analytics.activity_feed" 
-                :key="act.id"
-                class="p-3 bg-slate-900/60 border border-slate-700/50 rounded-2xl flex items-center justify-between gap-3 text-xs"
-              >
-                <div class="flex items-center gap-3 overflow-hidden">
-                  <div class="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-indigo-400 overflow-hidden shrink-0">
-                    <img v-if="act.student_avatar" :src="'https://api.dicebear.com/7.x/bottts/svg?seed=' + act.student_avatar" class="w-full h-full object-cover" />
-                    <span v-else>{{ act.student_name ? act.student_name.charAt(0) : 'S' }}</span>
-                  </div>
-                  <div class="truncate">
-                    <div class="font-bold text-slate-200 truncate">{{ act.student_name }}</div>
-                    <div class="text-slate-400 text-[11px] truncate">{{ act.target_title }}</div>
-                  </div>
-                </div>
-
-                <div class="flex flex-col items-end shrink-0">
-                  <span :class="{
-                    'px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider': true,
-                    'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': act.status === 'Passed',
-                    'bg-red-500/20 text-red-400 border border-red-500/30': act.status === 'Failed' || act.status === 'SyntaxError' || act.status === 'Error',
-                    'bg-amber-500/20 text-amber-400 border border-amber-500/30': act.status === 'Pending' || act.status === 'Running'
-                  }">
-                    {{ act.status }}
-                  </span>
-                  <span class="text-[10px] text-slate-500 mt-1 font-mono">
-                    {{ formatRelativeTime(act.created_at) }}
-                  </span>
-                </div>
-              </div>
-
-              <div v-if="!analytics.activity_feed || analytics.activity_feed.length === 0" class="text-xs text-slate-500 text-center py-4">
-                No recent activity recorded.
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-      <!-- TAB 2: GROUP COMPARISON & CUSTOM CHARTS -->
-      <div v-else-if="activeTab === 'group_comparison'" class="space-y-8">
-        
-        <!-- Group Comparison Bar Chart Card -->
-        <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl">
-          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <!-- Total Students -->
+        <div class="relative overflow-hidden bg-slate-800/60 backdrop-blur-md p-5 rounded-3xl border border-slate-700/60 shadow-xl group hover:border-indigo-500/50 transition-all duration-300">
+          <div class="flex justify-between items-start">
             <div>
-              <h3 class="text-xl font-bold text-white">Comparative Group Performance Chart</h3>
-              <p class="text-xs text-slate-400 mt-1">Comparing average XP and total solved questions across your student cohorts</p>
+              <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Students</p>
+              <h3 class="text-3xl font-black text-white mt-1">{{ analytics.total_students }}</h3>
+            </div>
+            <div class="p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/20 group-hover:scale-110 transition-transform">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+              </svg>
             </div>
           </div>
+          <p class="text-xs text-slate-500 mt-3 font-medium">Excludes mentors & admins</p>
+        </div>
 
-          <div v-if="analytics.groups.length === 0" class="p-12 text-center text-slate-400">
+        <!-- Active Students (7 Days) -->
+        <div class="relative overflow-hidden bg-slate-800/60 backdrop-blur-md p-5 rounded-3xl border border-slate-700/60 shadow-xl group hover:border-emerald-500/50 transition-all duration-300">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Active This Week</p>
+              <h3 class="text-3xl font-black text-emerald-400 mt-1">{{ analytics.active_students }}</h3>
+            </div>
+            <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 group-hover:scale-110 transition-transform">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-3 font-medium">Coding within last 7 days</p>
+        </div>
+
+        <!-- My Managed Groups -->
+        <div class="relative overflow-hidden bg-slate-800/60 backdrop-blur-md p-5 rounded-3xl border border-slate-700/60 shadow-xl group hover:border-purple-500/50 transition-all duration-300">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">My Groups</p>
+              <h3 class="text-3xl font-black text-purple-400 mt-1">{{ analytics.groups.length }}</h3>
+            </div>
+            <div class="p-3 bg-purple-500/10 text-purple-400 rounded-2xl border border-purple-500/20 group-hover:scale-110 transition-transform">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+              </svg>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-3 font-medium">Assigned classrooms</p>
+        </div>
+
+        <!-- Overall Pass Rate -->
+        <div class="relative overflow-hidden bg-slate-800/60 backdrop-blur-md p-5 rounded-3xl border border-slate-700/60 shadow-xl group hover:border-amber-500/50 transition-all duration-300">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Overall Pass Rate</p>
+              <h3 class="text-3xl font-black text-amber-400 mt-1">{{ analytics.overall_pass_rate }}%</h3>
+            </div>
+            <div class="p-3 bg-amber-500/10 text-amber-400 rounded-2xl border border-amber-500/20 group-hover:scale-110 transition-transform">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-3 font-medium">Across {{ analytics.total_submissions }} submissions</p>
+        </div>
+      </div>
+
+      <!-- Groups Management Cards Grid -->
+      <div class="bg-slate-800/60 backdrop-blur-md p-6 rounded-3xl border border-slate-700/60 shadow-xl space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+              My Managed Groups
+            </h2>
+            <p class="text-slate-400 text-xs mt-0.5">Classes and student cohorts under your supervision</p>
+          </div>
+          <button 
+            @click="openCreateGroupModal"
+            class="text-xs font-semibold px-4 py-2 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl transition-all cursor-pointer"
+          >
+            + Add New Group
+          </button>
+        </div>
+
+        <div v-if="analytics.groups.length === 0" class="p-8 text-center bg-slate-900/40 rounded-2xl border border-slate-700/40 text-slate-400">
+          No groups found. Click "Add New Group" above to create your first class!
+        </div>
+
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div 
+            v-for="g in analytics.groups" 
+            :key="g.id"
+            class="bg-slate-900/60 p-5 rounded-2xl border border-slate-700/60 shadow-md space-y-4 hover:border-indigo-500/40 transition-all group"
+          >
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="font-bold text-white text-base group-hover:text-indigo-400 transition-colors">{{ g.name }}</h3>
+                <span class="inline-block text-[11px] font-medium text-slate-400 bg-slate-800 px-2.5 py-0.5 rounded-md mt-1 border border-slate-700">
+                  {{ g.student_count }} Students
+                </span>
+              </div>
+              <div class="flex items-center gap-1">
+                <button 
+                  @click="openEditGroupModal(g)" 
+                  class="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                  title="Edit Group"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                </button>
+                <button 
+                  @click="confirmDeleteGroup(g)" 
+                  class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                  title="Delete Group"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Group Stats Preview -->
+            <div class="grid grid-cols-2 gap-2 text-xs bg-slate-800/50 p-3 rounded-xl border border-slate-700/40">
+              <div>
+                <p class="text-slate-400">Avg XP</p>
+                <p class="text-sm font-black text-amber-400 mt-0.5">{{ g.average_xp }} XP</p>
+              </div>
+              <div>
+                <p class="text-slate-400">Questions Solved</p>
+                <p class="text-sm font-black text-emerald-400 mt-0.5">{{ g.passed_count }}</p>
+              </div>
+            </div>
+
+            <!-- Roster Action -->
+            <button 
+              @click="openManageRosterModal(g)"
+              class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-indigo-300 font-semibold text-xs rounded-xl border border-slate-700 transition-colors cursor-pointer"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+              <span>Manage Student Roster</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance Comparison Charts Section -->
+      <div class="bg-slate-800/60 backdrop-blur-md p-6 rounded-3xl border border-slate-700/60 shadow-xl space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-700/60 pb-4">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+              Performance Comparison Analytics
+            </h2>
+            <p class="text-slate-400 text-xs mt-0.5">Visual charts comparing group averages and individual student progress</p>
+          </div>
+
+          <!-- Chart Selector Tabs -->
+          <div class="flex items-center bg-slate-900/80 p-1 rounded-2xl border border-slate-700/60 text-xs font-semibold">
+            <button 
+              @click="activeChartTab = 'groups'" 
+              :class="activeChartTab === 'groups' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+              class="px-4 py-2 rounded-xl transition-all cursor-pointer"
+            >
+              Group vs Group
+            </button>
+            <button 
+              @click="activeChartTab = 'students'" 
+              :class="activeChartTab === 'students' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+              class="px-4 py-2 rounded-xl transition-all cursor-pointer"
+            >
+              Student Rankings
+            </button>
+          </div>
+        </div>
+
+        <!-- Chart View A: Group vs Group Comparison -->
+        <div v-if="activeChartTab === 'groups'" class="space-y-4">
+          <p class="text-xs text-slate-400">Comparing average XP per student across your managed groups:</p>
+          
+          <div v-if="groupComparisonData.length === 0" class="p-8 text-center text-slate-500 text-xs">
             No groups available to compare.
           </div>
 
-          <!-- Group Visual Chart Grid -->
-          <div v-else class="space-y-6">
-            <div v-for="g in analytics.groups" :key="g.id" class="space-y-2">
-              <div class="flex justify-between items-center text-sm">
-                <div class="font-bold text-slate-200 flex items-center gap-2">
-                  <span>{{ g.name }}</span>
-                  <span class="text-xs text-slate-400 font-normal">({{ g.student_count }} students)</span>
-                </div>
-                <div class="font-mono text-xs text-amber-400 font-bold">
-                  Avg XP: {{ g.average_xp }} | Total Tasks: {{ g.total_passed_questions }}
-                </div>
+          <div v-else class="space-y-4">
+            <div v-for="g in groupComparisonData" :key="g.id" class="space-y-1.5">
+              <div class="flex justify-between text-xs font-semibold">
+                <span class="text-white">{{ g.name }} ({{ g.student_count }} students)</span>
+                <span class="text-amber-400 font-bold">{{ g.average_xp }} Avg XP • {{ g.passed_count }} Solved</span>
               </div>
-
-              <!-- Bar 1: Average XP -->
-              <div class="w-full bg-slate-900/80 rounded-xl h-6 p-1 flex items-center">
+              <div class="h-3.5 bg-slate-900/80 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
                 <div 
-                  class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-lg transition-all duration-500 flex items-center justify-end pr-2 text-[10px] font-black text-white"
-                  :style="{ width: Math.max((g.average_xp / maxGroupXP) * 100, 8) + '%' }"
+                  class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-amber-400 rounded-full transition-all duration-700 relative"
+                  :style="{ width: g.xpPercent + '%' }"
                 >
-                  {{ g.average_xp }} XP
+                  <div class="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Student Comparison Within Selected Group -->
-        <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl space-y-6">
-          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h3 class="text-xl font-bold text-white">Student Leaderboard & Comparison within Group</h3>
-              <p class="text-xs text-slate-400 mt-1">Select a group to analyze individual student performance relative to group mates</p>
-            </div>
-
-            <!-- Group Selector -->
+        <!-- Chart View B: Student Performance Rankings within Group -->
+        <div v-else class="space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <p class="text-xs text-slate-400">Top 10 performing students by total XP:</p>
             <select 
-              v-model="selectedGroupFilter"
-              class="bg-slate-900/90 border border-slate-700/80 text-slate-200 rounded-2xl px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 font-medium"
+              v-model="selectedChartGroup" 
+              class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 text-slate-200 outline-none focus:border-indigo-500"
             >
-              <option value="ALL">All Students</option>
+              <option value="ALL">All Groups</option>
               <option v-for="g in analytics.groups" :key="g.id" :value="g.name">{{ g.name }}</option>
             </select>
           </div>
 
-          <!-- Students Bar Chart Comparison -->
-          <div class="space-y-4 pt-2">
-            <div v-for="s in studentsInSelectedGroup" :key="s.id" class="p-4 bg-slate-900/50 rounded-2xl border border-slate-700/50 space-y-2">
-              <div class="flex justify-between items-center">
-                <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 rounded-xl bg-indigo-900/40 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400 overflow-hidden shrink-0">
-                    <img v-if="s.avatar" :src="'https://api.dicebear.com/7.x/bottts/svg?seed=' + s.avatar" class="w-full h-full object-cover" />
-                    <span v-else>{{ s.full_name ? s.full_name.charAt(0) : 'S' }}</span>
-                  </div>
-                  <div>
-                    <span class="font-bold text-slate-200 text-sm">{{ s.full_name }}</span>
-                    <span class="text-xs text-slate-400 ml-2">({{ s.group_name }})</span>
-                  </div>
-                </div>
-                <div class="font-mono text-xs text-emerald-400 font-bold">
-                  {{ s.xp }} XP | {{ s.passed_questions }} Solved
-                </div>
-              </div>
+          <div v-if="studentChartData.length === 0" class="p-8 text-center text-slate-500 text-xs">
+            No student data found for this selection.
+          </div>
 
-              <!-- Bar Comparison -->
-              <div class="w-full bg-slate-950 rounded-lg h-5 p-0.5 flex items-center">
+          <div v-else class="space-y-3">
+            <div v-for="(st, idx) in studentChartData" :key="st.id" class="space-y-1">
+              <div class="flex justify-between items-center text-xs">
+                <span class="font-bold text-slate-200 flex items-center gap-2">
+                  <span class="w-5 h-5 flex items-center justify-center rounded-md bg-slate-900 text-[10px] font-black text-indigo-400">#{{ idx + 1 }}</span>
+                  {{ st.full_name }} <span class="text-slate-500 font-normal">({{ st.group_name }})</span>
+                </span>
+                <span class="text-amber-400 font-bold">{{ st.xp }} XP</span>
+              </div>
+              <div class="h-3 bg-slate-900/80 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
                 <div 
-                  class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-md transition-all duration-500 flex items-center justify-end pr-2 text-[10px] font-black text-slate-950"
-                  :style="{ width: Math.max((s.xp / maxStudentXPInGroup) * 100, 10) + '%' }"
-                >
-                  {{ s.xp }} XP
-                </div>
+                  class="h-full bg-gradient-to-r from-emerald-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-700"
+                  :style="{ width: st.xpPercent + '%' }"
+                ></div>
               </div>
-            </div>
-
-            <div v-if="studentsInSelectedGroup.length === 0" class="p-8 text-center text-slate-400 text-sm">
-              No students found for this group selection.
             </div>
           </div>
         </div>
-
       </div>
 
-      <!-- TAB 3: GROUP MANAGEMENT -->
-      <div v-else-if="activeTab === 'manage_groups'" class="space-y-6">
-        <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl flex justify-between items-center">
+      <!-- Student Roster Table -->
+      <div class="bg-slate-800/60 backdrop-blur-md p-6 rounded-3xl border border-slate-700/60 shadow-xl space-y-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h3 class="text-xl font-bold text-white">Manage Cohort Groups</h3>
-            <p class="text-xs text-slate-400 mt-1">Create and configure groups. You have administrative permissions on groups created by you.</p>
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+              </svg>
+              Student Performance Roster
+            </h2>
+            <p class="text-slate-400 text-xs mt-0.5">Filter, search, and manage registered students</p>
           </div>
-          <button 
-            @click="openCreateGroupModal"
-            class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition-all"
-          >
-            + Create Group
-          </button>
+
+          <!-- Controls -->
+          <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <!-- Search -->
+            <div class="relative flex-1 md:w-64">
+              <input 
+                v-model="searchQuery" 
+                type="text" 
+                placeholder="Search student name or email..."
+                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-2xl py-2 px-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <!-- Group Filter -->
+            <select 
+              v-model="selectedGroupFilter"
+              class="bg-slate-900/80 border border-slate-700/80 rounded-2xl py-2 px-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="ALL">All Groups</option>
+              <option v-for="g in analytics.groups" :key="g.id" :value="g.name">{{ g.name }}</option>
+              <option value="Unassigned">Unassigned</option>
+            </select>
+
+            <!-- Sort By -->
+            <select 
+              v-model="sortBy"
+              class="bg-slate-900/80 border border-slate-700/80 rounded-2xl py-2 px-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="xp_desc">Sort by Highest XP</option>
+              <option value="xp_asc">Sort by Lowest XP</option>
+              <option value="passed_desc">Most Solved Questions</option>
+              <option value="rate_desc">Highest Success Rate</option>
+            </select>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Student Table -->
+        <div class="overflow-x-auto rounded-2xl border border-slate-700/60">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/80 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-700/60">
+              <tr>
+                <th class="py-3.5 px-4">Student</th>
+                <th class="py-3.5 px-4">Group</th>
+                <th class="py-3.5 px-4">Level & XP</th>
+                <th class="py-3.5 px-4">Solved</th>
+                <th class="py-3.5 px-4">Success Rate</th>
+                <th class="py-3.5 px-4">Last Active</th>
+                <th class="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-700/40 bg-slate-900/30">
+              <tr v-if="filteredStudents.length === 0">
+                <td colspan="7" class="py-8 text-center text-slate-500">
+                  No students found matching the selected filters.
+                </td>
+              </tr>
+
+              <tr v-for="s in filteredStudents" :key="s.id" class="hover:bg-slate-800/40 transition-colors">
+                <!-- Name & Email -->
+                <td class="py-3.5 px-4">
+                  <div class="flex items-center gap-3">
+                    <img 
+                      :src="s.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + s.username" 
+                      class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700" 
+                      alt="Avatar"
+                    />
+                    <div>
+                      <p class="font-bold text-white text-sm">{{ s.full_name }}</p>
+                      <p class="text-[11px] text-slate-400 font-mono">{{ s.username }} • {{ s.email }}</p>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Group Badge -->
+                <td class="py-3.5 px-4">
+                  <span 
+                    class="inline-block px-2.5 py-1 rounded-lg text-[11px] font-semibold border"
+                    :class="s.group_name === 'Unassigned' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'"
+                  >
+                    {{ s.group_name }}
+                  </span>
+                </td>
+
+                <!-- Level & XP -->
+                <td class="py-3.5 px-4">
+                  <div>
+                    <span class="font-black text-amber-400">{{ s.xp }} XP</span>
+                    <p class="text-[11px] text-slate-400">Level {{ s.level }} ({{ s.level_title }})</p>
+                  </div>
+                </td>
+
+                <!-- Solved -->
+                <td class="py-3.5 px-4">
+                  <span class="font-bold text-emerald-400">{{ s.passed_questions }} questions</span>
+                </td>
+
+                <!-- Success Rate -->
+                <td class="py-3.5 px-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-12 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                      <div class="bg-indigo-500 h-full rounded-full" :style="{ width: s.success_rate + '%' }"></div>
+                    </div>
+                    <span class="font-mono font-bold">{{ s.success_rate }}%</span>
+                  </div>
+                </td>
+
+                <!-- Last Active -->
+                <td class="py-3.5 px-4 font-mono text-slate-400 text-[11px]">
+                  {{ formatRelativeTime(s.last_active) }}
+                </td>
+
+                <!-- Actions -->
+                <td class="py-3.5 px-4 text-right">
+                  <button 
+                    v-if="currentUser.role === 'Admin'"
+                    @click="confirmDeleteUser(s)"
+                    class="text-rose-400 hover:text-rose-300 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                    title="Delete Account"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Live Code Activity Feed -->
+      <div class="bg-slate-800/60 backdrop-blur-md p-6 rounded-3xl border border-slate-700/60 shadow-xl space-y-4">
+        <h2 class="text-xl font-bold text-white flex items-center gap-2">
+          <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          Live Activity Feed
+        </h2>
+
+        <div v-if="analytics.activity_feed.length === 0" class="p-6 text-center text-slate-500 text-xs">
+          No recent code submissions detected.
+        </div>
+
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <div 
-            v-for="g in analytics.groups" 
-            :key="g.id" 
-            class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg flex flex-col justify-between space-y-4"
+            v-for="act in analytics.activity_feed" 
+            :key="act.id" 
+            class="flex items-center gap-3 p-3.5 bg-slate-900/60 rounded-2xl border border-slate-700/40"
           >
-            <div>
-              <div class="flex justify-between items-start mb-2">
-                <h4 class="text-lg font-bold text-white">{{ g.school_name }}</h4>
-                <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider', canManageGroup(g) ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-slate-700 text-slate-400']">
-                  {{ canManageGroup(g) ? 'Owner' : 'View Only' }}
-                </span>
-              </div>
-              <div class="text-sm font-semibold text-indigo-400 mb-1">Class: {{ g.class }}</div>
-              <div class="text-xs text-slate-400">Academic Year: {{ g.academic_year }}</div>
-              <div class="text-xs text-slate-400 mt-1">Created by: <b class="text-slate-300">{{ g.created_by_name }}</b></div>
+            <img 
+              :src="act.student_avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + act.student_id" 
+              class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700" 
+              alt="Avatar"
+            />
+            <div class="flex-1 min-w-0 text-xs">
+              <p class="font-bold text-white truncate">{{ act.student_name }}</p>
+              <p class="text-slate-400 truncate">{{ act.target_title }}</p>
             </div>
-
-            <div class="pt-4 border-t border-slate-700/50 flex justify-between items-center">
-              <span class="text-xs font-mono font-bold text-slate-300">{{ g.student_count }} Enrolled Students</span>
-              
-              <div v-if="canManageGroup(g)" class="flex gap-2">
-                <button 
-                  @click="openEditGroupModal(g)" 
-                  class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-semibold transition-all"
-                >
-                  Edit
-                </button>
-                <button 
-                  @click="confirmDeleteGroup(g)" 
-                  class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-xs font-semibold transition-all"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="analytics.groups.length === 0" class="col-span-full p-12 text-center text-slate-400">
-            No student groups registered yet.
+            <span 
+              class="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase"
+              :class="act.status === 'Passed' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'"
+            >
+              {{ act.status }}
+            </span>
           </div>
         </div>
       </div>
 
     </template>
 
-    <!-- CREATE / EDIT GROUP MODAL -->
-    <div v-if="showGroupModal" class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" @click="showGroupModal = false"></div>
-        
-        <div class="relative bg-slate-800 rounded-3xl max-w-md w-full p-6 border border-slate-700 shadow-2xl space-y-5">
-          <div class="flex justify-between items-center border-b border-slate-700/60 pb-3">
-            <h3 class="text-lg font-bold text-white">{{ isEditingGroup ? 'Edit Group' : 'Create New Group' }}</h3>
-            <button @click="showGroupModal = false" class="text-slate-400 hover:text-white">&times;</button>
+    <!-- Create / Edit Group Modal -->
+    <div v-if="showCreateGroupModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 w-full max-w-md space-y-6 shadow-2xl animate-scale-up">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+          <h3 class="text-lg font-bold text-white">{{ isEditingGroup ? 'Edit Group' : 'Create New Group' }}</h3>
+          <button @click="showCreateGroupModal = false" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+        </div>
+
+        <form @submit.prevent="handleGroupSubmit" class="space-y-4 text-xs">
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">School / Organization Name</label>
+            <input 
+              v-model="groupForm.school_name" 
+              type="text" 
+              required 
+              placeholder="e.g. Greenwood High School"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500"
+            />
           </div>
 
-          <div class="space-y-4">
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">School Name</label>
-              <input 
-                v-model="groupForm.school_name" 
-                type="text" 
-                placeholder="e.g. Al-Amal High School"
-                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">Class / Grade Name</label>
+            <input 
+              v-model="groupForm.class" 
+              type="text" 
+              required 
+              placeholder="e.g. Grade 10 - Section A"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
 
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Class / Grade</label>
-              <input 
-                v-model="groupForm.class" 
-                type="text" 
-                placeholder="e.g. Grade 10 - Section A"
-                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">Academic Year</label>
+            <input 
+              v-model="groupForm.academic_year" 
+              type="text" 
+              required 
+              placeholder="e.g. 2025-2026"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
 
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Academic Year</label>
-              <input 
-                v-model="groupForm.academic_year" 
-                type="text" 
-                placeholder="e.g. 2025/2026"
-                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
+          <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <button type="button" @click="showCreateGroupModal = false" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold cursor-pointer">Cancel</button>
+            <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold cursor-pointer shadow-lg shadow-indigo-500/25">Save Group</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Manage Student Roster Modal -->
+    <div v-if="showManageRosterModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 w-full max-w-2xl space-y-6 shadow-2xl animate-scale-up">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+          <div>
+            <h3 class="text-lg font-bold text-white">Group Roster: {{ activeGroupForRoster?.name }}</h3>
+            <p class="text-xs text-slate-400">Add unassigned students or remove current group members</p>
+          </div>
+          <button @click="showManageRosterModal = false" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+        </div>
+
+        <div class="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
+          <!-- Current Group Members -->
+          <div class="space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-400">Current Members ({{ groupStudents.length }})</h4>
+            <div v-if="groupStudents.length === 0" class="p-4 bg-slate-800/40 rounded-xl text-center text-xs text-slate-500">
+              No students currently assigned to this group.
+            </div>
+            <div v-else class="space-y-1.5">
+              <div v-for="st in groupStudents" :key="st.id" class="flex justify-between items-center p-2.5 bg-slate-800/60 rounded-xl border border-slate-700/50 text-xs">
+                <div class="flex items-center gap-2">
+                  <img :src="st.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + st.username" class="w-6 h-6 rounded-md bg-slate-900" />
+                  <span class="font-bold text-white">{{ st.full_name }}</span>
+                  <span class="text-slate-400 font-mono">({{ st.email }})</span>
+                </div>
+                <button 
+                  @click="assignStudent(st.id, null)" 
+                  class="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="flex justify-end gap-3 pt-3">
-            <button @click="showGroupModal = false" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-sm font-semibold">
-              Cancel
-            </button>
-            <button @click="saveGroup" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg">
-              Save Group
-            </button>
+          <!-- Unassigned Students -->
+          <div class="space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400">Available Unassigned Students ({{ unassignedStudents.length }})</h4>
+            <div v-if="unassignedStudents.length === 0" class="p-4 bg-slate-800/40 rounded-xl text-center text-xs text-slate-500">
+              No unassigned students available.
+            </div>
+            <div v-else class="space-y-1.5">
+              <div v-for="st in unassignedStudents" :key="st.id" class="flex justify-between items-center p-2.5 bg-slate-800/60 rounded-xl border border-slate-700/50 text-xs">
+                <div class="flex items-center gap-2">
+                  <img :src="st.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + st.username" class="w-6 h-6 rounded-md bg-slate-900" />
+                  <span class="font-bold text-white">{{ st.full_name }}</span>
+                  <span class="text-slate-400 font-mono">({{ st.email }})</span>
+                </div>
+                <button 
+                  @click="assignStudent(st.id, activeGroupForRoster.id)" 
+                  class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  + Add to Group
+                </button>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div class="flex justify-end pt-4 border-t border-slate-800">
+          <button @click="showManageRosterModal = false" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl cursor-pointer">Done</button>
         </div>
       </div>
     </div>
 
-    <!-- STUDENT DETAIL PERFORMANCE COMPARISON MODAL -->
-    <div v-if="showStudentModal && selectedStudent" class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" @click="showStudentModal = false"></div>
-        
-        <div class="relative bg-slate-800 rounded-3xl max-w-xl w-full p-6 border border-slate-700 shadow-2xl space-y-6">
-          
-          <!-- Header -->
-          <div class="flex items-center justify-between border-b border-slate-700/60 pb-4">
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-2xl bg-indigo-900/40 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400 overflow-hidden">
-                <img v-if="selectedStudent.avatar" :src="'https://api.dicebear.com/7.x/bottts/svg?seed=' + selectedStudent.avatar" class="w-full h-full object-cover" />
-                <span v-else>{{ selectedStudent.full_name.charAt(0) }}</span>
-              </div>
-              <div>
-                <h3 class="text-xl font-bold text-white">{{ selectedStudent.full_name }}</h3>
-                <div class="text-xs text-slate-400">@{{ selectedStudent.username }} | {{ selectedStudent.group_name }}</div>
-              </div>
-            </div>
-            <button @click="showStudentModal = false" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
-          </div>
-
-          <!-- Comparative Performance Chart (Requirement 7) -->
-          <div class="space-y-4">
-            <h4 class="text-sm font-bold text-indigo-300 uppercase tracking-wider">Performance vs Group Average</h4>
-
-            <!-- XP Comparison -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-xs text-slate-300">
-                <span>XP Points</span>
-                <span class="font-mono">Student: <b>{{ selectedStudent.xp }}</b> | Group Avg: <b>{{ selectedStudent.group_avg_xp }}</b></span>
-              </div>
-              <div class="w-full bg-slate-900 rounded-lg h-4 flex overflow-hidden">
-                <div class="bg-indigo-500 h-full transition-all" :style="{ width: Math.min((selectedStudent.xp / Math.max(selectedStudent.xp, selectedStudent.group_avg_xp, 1)) * 100, 100) + '%' }"></div>
-              </div>
-            </div>
-
-            <!-- Tasks Solved Comparison -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-xs text-slate-300">
-                <span>Tasks Solved</span>
-                <span class="font-mono">Student: <b>{{ selectedStudent.passed_questions }}</b> | Group Avg: <b>{{ selectedStudent.group_avg_passed }}</b></span>
-              </div>
-              <div class="w-full bg-slate-900 rounded-lg h-4 flex overflow-hidden">
-                <div class="bg-emerald-500 h-full transition-all" :style="{ width: Math.min((selectedStudent.passed_questions / Math.max(selectedStudent.passed_questions, selectedStudent.group_avg_passed, 1)) * 100, 100) + '%' }"></div>
-              </div>
-            </div>
-
-            <!-- Accuracy Rate -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-xs text-slate-300">
-                <span>Submission Accuracy</span>
-                <span class="font-mono"><b>{{ selectedStudent.success_rate }}%</b></span>
-              </div>
-              <div class="w-full bg-slate-900 rounded-lg h-4 flex overflow-hidden">
-                <div class="bg-teal-400 h-full transition-all" :style="{ width: selectedStudent.success_rate + '%' }"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Footer Actions -->
-          <div class="flex justify-between items-center pt-4 border-t border-slate-700/60">
-            <button @click="confirmDeleteStudent(selectedStudent)" class="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-xs font-semibold">
-              Delete Account
-            </button>
-            <button @click="showStudentModal = false" class="px-5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold">
-              Close
-            </button>
-          </div>
-
+    <!-- Confirm Delete Modal -->
+    <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 w-full max-w-sm text-center space-y-4 shadow-2xl">
+        <h3 class="text-lg font-bold text-white">Confirm Deletion</h3>
+        <p class="text-xs text-slate-300">
+          Are you sure you want to delete 
+          <span class="font-bold text-rose-400">{{ userToDelete ? userToDelete.full_name : groupToDelete?.name }}</span>?
+        </p>
+        <div class="flex justify-center gap-3 pt-2">
+          <button @click="showDeleteConfirm = false; userToDelete = null; groupToDelete = null;" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl font-semibold cursor-pointer">Cancel</button>
+          <button @click="userToDelete ? executeUserDelete() : executeGroupDelete()" class="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs rounded-xl font-bold cursor-pointer">Delete</button>
         </div>
       </div>
     </div>
 
-    <!-- DELETE CONFIRMATION MODAL -->
-    <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" @click="cancelDelete"></div>
-        <div class="relative bg-slate-800 rounded-3xl max-w-md w-full p-6 border border-slate-700 shadow-2xl text-left" dir="ltr">
-          <div class="flex items-start gap-4">
-            <div class="p-3 bg-red-500/20 rounded-2xl text-red-400">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            </div>
-            <div>
-              <h3 class="text-lg font-bold text-white mb-1">Confirm Deletion</h3>
-              <p class="text-sm text-slate-400">
-                Are you sure you want to delete <b class="text-white">{{ itemToDelete?.data?.full_name || itemToDelete?.data?.name || itemToDelete?.data?.school_name }}</b>? This action cannot be undone.
-              </p>
-            </div>
-          </div>
-          <div class="mt-6 flex justify-end gap-3">
-            <button @click="cancelDelete" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-sm font-semibold transition-all cursor-pointer">
-              Cancel
-            </button>
-            <button @click="executeDelete" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-600/30 transition-all cursor-pointer">
-              Confirm Delete
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <AlertModal :show="alertState.show" :message="alertState.message" @close="alertState.show = false" />
+    <AlertModal 
+      :show="alertState.show" 
+      :message="alertState.message" 
+      @close="alertState.show = false" 
+    />
   </div>
 </template>
+
+<style scoped>
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scale-up {
+  animation: scaleUp 0.2s ease-out forwards;
+}
+</style>
