@@ -85,6 +85,28 @@ const submitForm = async () => {
   }
 }
 
+const showDeleteModal = ref(false)
+const groupToDelete = ref(null)
+
+const confirmDeleteGroup = (g, event) => {
+  event.stopPropagation()
+  groupToDelete.value = g
+  showDeleteModal.value = true
+}
+
+const deleteGroup = async () => {
+  if (!groupToDelete.value) return
+  try {
+    await axios.delete(`${API_BASE_URL}/api/groups/${groupToDelete.value.id}`)
+    await fetchGroups()
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to delete group')
+  } finally {
+    showDeleteModal.value = false
+    groupToDelete.value = null
+  }
+}
+
 const goToGroup = (id) => {
   router.push(`/groups/${id}`)
 }
@@ -95,7 +117,7 @@ const goToGroup = (id) => {
     <div class="mb-6 flex justify-between items-center transition-colors">
       <div>
         <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Student Groups</h2>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">Manage classes and academic years</p>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">Manage classes and academic years (showing your assigned groups)</p>
       </div>
       <div class="flex space-x-3">
         <button @click="openModal" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -116,6 +138,7 @@ const goToGroup = (id) => {
             <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">School Name</th>
             <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Class</th>
             <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Academic Year</th>
+            <th scope="col" class="px-6 py-3 text-right text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
           </tr>
         </thead>
         <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -131,9 +154,35 @@ const goToGroup = (id) => {
                 {{ g.academic_year }}
               </span>
             </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <button 
+                @click="confirmDeleteGroup(g, $event)" 
+                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 font-semibold p-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
+                title="Delete Group"
+              >
+                Delete
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Delete Group Modal -->
+    <div v-if="showDeleteModal" class="fixed inset-0 z-50 overflow-y-auto">
+      <div class="flex items-center justify-center min-h-screen p-4 text-center">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showDeleteModal = false"></div>
+        <div class="inline-block bg-white dark:bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">Delete Group</h3>
+          <p class="mt-2 text-sm text-gray-500 dark:text-slate-400">
+            Are you sure you want to delete <b class="text-slate-800 dark:text-slate-200">{{ groupToDelete?.school_name }} - {{ groupToDelete?.class }}</b>? Students in this group will be unassigned.
+          </p>
+          <div class="mt-6 flex justify-end space-x-3">
+            <button @click="showDeleteModal = false" class="px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-slate-200 rounded-md text-sm font-medium">Cancel</button>
+            <button @click="deleteGroup" class="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700">Delete</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Create Group Modal -->

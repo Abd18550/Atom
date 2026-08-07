@@ -7,11 +7,12 @@ import AlertModal from '../components/AlertModal.vue'
 
 const router = useRouter()
 const analytics = ref(null)
+const groupComparisons = ref([])
 const loading = ref(true)
 const error = ref('')
 
 const searchQuery = ref('')
-const selectedGroupFilter = ref('ALL')
+const selectedGroupFilter = ref('ALL') // 'ALL' or group ID as number/string
 const sortBy = ref('xp_desc')
 
 const showDeleteConfirm = ref(false)
@@ -34,17 +35,21 @@ onMounted(async () => {
   }
 
   axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-  await fetchAnalytics()
+  await fetchAllData()
 })
 
-const fetchAnalytics = async () => {
+const fetchAllData = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/mentor/analytics`)
-    analytics.value = res.data
+    const [analyticsRes, comparisonRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/api/mentor/analytics`),
+      axios.get(`${API_BASE_URL}/api/mentor/group-comparison`)
+    ])
+    analytics.value = analyticsRes.data
+    groupComparisons.value = comparisonRes.data
   } catch (err) {
-    error.value = 'فشل في تحميل تحليلات الموجه. يرجى المحاولة مرة أخرى.'
+    error.value = 'Failed to load mentor analytics. Please try again.'
   } finally {
     loading.value = false
   }
@@ -59,12 +64,14 @@ const filteredStudents = computed(() => {
                           s.username.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                           s.email.toLowerCase().includes(searchQuery.value.toLowerCase())
     
-    const matchesGroup = selectedGroupFilter.value === 'ALL' || s.group_name === selectedGroupFilter.value
+    let matchesGroup = true
+    if (selectedGroupFilter.value !== 'ALL') {
+      matchesGroup = s.group_id === Number(selectedGroupFilter.value)
+    }
     
     return matchesSearch && matchesGroup
   })
 
-  // Sorting logic
   return list.sort((a, b) => {
     if (sortBy.value === 'xp_desc') return b.xp - a.xp
     if (sortBy.value === 'xp_asc') return a.xp - b.xp
@@ -74,16 +81,27 @@ const filteredStudents = computed(() => {
   })
 })
 
+// Max values for responsive SVG chart scaling
+const maxGroupXP = computed(() => {
+  if (!groupComparisons.value || groupComparisons.value.length === 0) return 100
+  return Math.max(...groupComparisons.value.map(g => g.average_xp), 100)
+})
+
+const maxStudentXPInGroup = computed(() => {
+  if (filteredStudents.value.length === 0) return 100
+  return Math.max(...filteredStudents.value.map(s => s.xp), 100)
+})
+
 const formatRelativeTime = (dateStr) => {
-  if (!dateStr) return 'لم ينشط بعد'
+  if (!dateStr) return 'Inactive'
   const date = new Date(dateStr)
   const now = new Date()
   const diffInSeconds = Math.floor((now - date) / 1000)
   
-  if (diffInSeconds < 60) return 'منذ لحظات'
-  if (diffInSeconds < 3600) return `منذ ${Math.floor(diffInSeconds / 60)} دقيقة`
-  if (diffInSeconds < 86400) return `منذ ${Math.floor(diffInSeconds / 3600)} ساعة`
-  return `منذ ${Math.floor(diffInSeconds / 86400)} يوم`
+  if (diffInSeconds < 60) return 'Just now'
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
+  return `${Math.floor(diffInSeconds / 86400)}d ago`
 }
 
 const confirmDelete = (u) => {
@@ -101,9 +119,9 @@ const executeDelete = async () => {
   
   try {
     await axios.delete(`${API_BASE_URL}/api/users/${userToDelete.value.id}`)
-    await fetchAnalytics()
+    await fetchAllData()
   } catch (err) {
-    alertState.value = { show: true, message: err.response?.data?.error || 'فشل في حذف الحساب' }
+    alertState.value = { show: true, message: err.response?.data?.error || 'Failed to delete student account' }
   } finally {
     cancelDelete()
   }
@@ -111,40 +129,48 @@ const executeDelete = async () => {
 </script>
 
 <template>
-  <div class="w-full max-w-7xl mx-auto px-4 py-6 space-y-8 text-slate-100 font-sans" dir="rtl">
+  <div class="w-full max-w-7xl mx-auto px-4 py-6 space-y-8 text-slate-100 font-sans">
     
     <!-- Page Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-800/60 backdrop-blur-xl p-6 rounded-3xl border border-slate-700/60 shadow-xl">
-      <div>
-        <div class="flex items-center gap-3">
-          <div class="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/30">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-            </svg>
-          </div>
-          <div>
-            <h1 class="text-3xl font-black tracking-tight text-white">لوحة تحليلات الموجه</h1>
-            <p class="text-slate-400 text-sm mt-0.5">متابعة إحصائيات الطلاب، المجموعات، والأنشطة البرمجية المباشرة</p>
-          </div>
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/30">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-3xl font-black tracking-tight text-white">Mentor Analytics Dashboard</h1>
+          <p class="text-slate-400 text-sm mt-0.5">Manage your assigned groups, view student metrics & compare performance</p>
         </div>
       </div>
 
-      <button 
-        @click="fetchAnalytics" 
-        :disabled="loading"
-        class="flex items-center gap-2 bg-slate-700/80 hover:bg-slate-600/80 text-white font-bold py-2.5 px-5 rounded-2xl border border-slate-600/60 shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-      >
-        <svg :class="{ 'animate-spin': loading }" class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-        </svg>
-        <span>تحديث البيانات</span>
-      </button>
+      <div class="flex items-center gap-3">
+        <button 
+          @click="router.push('/groups')"
+          class="flex items-center gap-2 bg-indigo-600/90 hover:bg-indigo-500 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
+          <span>Manage Groups</span>
+        </button>
+
+        <button 
+          @click="fetchAllData" 
+          :disabled="loading"
+          class="flex items-center gap-2 bg-slate-700/80 hover:bg-slate-600/80 text-white font-bold py-2.5 px-5 rounded-2xl border border-slate-600/60 shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+        >
+          <svg :class="{ 'animate-spin': loading }" class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
     </div>
 
     <!-- Loading State -->
     <div v-if="loading && !analytics" class="p-16 text-center">
       <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mb-4"></div>
-      <p class="text-slate-400 font-medium">جاري تحميل لوحة تحليلات الموجه...</p>
+      <p class="text-slate-400 font-medium">Loading mentor analytics...</p>
     </div>
 
     <!-- Error State -->
@@ -155,93 +181,122 @@ const executeDelete = async () => {
     <!-- Dashboard Content -->
     <template v-else-if="analytics">
       
-      <!-- Top KPI Cards -->
+      <!-- Top KPI Cards (Students ONLY) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         <!-- Total Students Card -->
         <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-indigo-500/40 transition-all">
-          <div class="absolute -left-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
           <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">إجمالي الطلاب</span>
+            <span class="text-slate-400 text-sm font-semibold">Total Students</span>
             <div class="p-2.5 rounded-2xl bg-indigo-500/20 text-indigo-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             </div>
           </div>
           <div class="text-4xl font-black text-white tracking-tight">{{ analytics.total_students }}</div>
-          <div class="text-xs text-slate-400 mt-2 font-medium">طالب مسجّل في المنصة</div>
+          <div class="text-xs text-slate-400 mt-2 font-medium">Students in your groups</div>
         </div>
 
         <!-- Active Students Card -->
         <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-          <div class="absolute -left-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
           <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">الطلاب النشطون (7 أيام)</span>
+            <span class="text-slate-400 text-sm font-semibold">Active Students (7d)</span>
             <div class="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
             </div>
           </div>
           <div class="text-4xl font-black text-white tracking-tight">{{ analytics.active_students }}</div>
           <div class="text-xs text-emerald-400 mt-2 font-medium">
-            {{ analytics.total_students > 0 ? Math.round((analytics.active_students / analytics.total_students) * 100) : 0 }}% نسبة التفاعل الأسبوعية
+            {{ analytics.total_students > 0 ? Math.round((analytics.active_students / analytics.total_students) * 100) : 0 }}% active engagement
           </div>
         </div>
 
         <!-- Total Submissions Card -->
         <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-all">
-          <div class="absolute -left-4 -top-4 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all"></div>
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all"></div>
           <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">إجمالي المحاولات البرمجية</span>
+            <span class="text-slate-400 text-sm font-semibold">Code Submissions</span>
             <div class="p-2.5 rounded-2xl bg-purple-500/20 text-purple-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
             </div>
           </div>
           <div class="text-4xl font-black text-white tracking-tight">{{ analytics.total_submissions }}</div>
-          <div class="text-xs text-slate-400 mt-2 font-medium">كود تمت تجربته بالبيئة المعزولة</div>
+          <div class="text-xs text-slate-400 mt-2 font-medium">Executed in sandbox</div>
         </div>
 
         <!-- Overall Pass Rate Card -->
         <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-lg relative overflow-hidden group hover:border-teal-500/40 transition-all">
-          <div class="absolute -left-4 -top-4 w-24 h-24 bg-teal-500/10 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-all"></div>
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-teal-500/10 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-all"></div>
           <div class="flex items-center justify-between mb-3">
-            <span class="text-slate-400 text-sm font-semibold">معدل الإجابات الصحيحة</span>
+            <span class="text-slate-400 text-sm font-semibold">Overall Pass Rate</span>
             <div class="p-2.5 rounded-2xl bg-teal-500/20 text-teal-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
           </div>
           <div class="text-4xl font-black text-white tracking-tight">{{ analytics.overall_pass_rate }}%</div>
-          <div class="text-xs text-teal-400 mt-2 font-medium">متوسط دقة حلول الطلاب</div>
+          <div class="text-xs text-teal-400 mt-2 font-medium">Average code accuracy</div>
         </div>
 
       </div>
 
-      <!-- Main Section Grid: Student Roster (Left) & Groups/Activity (Right) -->
+      <!-- Group-to-Group Comparison Chart Section -->
+      <div v-if="groupComparisons.length > 0" class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-white">Groups Overview & Comparison</h3>
+            <p class="text-xs text-slate-400">Compare average XP and problem solving metrics across your groups</p>
+          </div>
+          <span class="text-xs bg-indigo-500/20 text-indigo-300 font-bold px-3 py-1 rounded-full border border-indigo-500/30">
+            {{ groupComparisons.length }} Groups
+          </span>
+        </div>
+
+        <div class="space-y-3 pt-2">
+          <div v-for="g in groupComparisons" :key="g.id" class="space-y-1.5">
+            <div class="flex justify-between items-center text-xs font-semibold">
+              <span class="text-slate-200">{{ g.name }} ({{ g.student_count }} students)</span>
+              <span class="text-indigo-300 font-mono">{{ g.average_xp }} Avg XP | {{ g.avg_passed }} Avg Solved</span>
+            </div>
+            <!-- Custom Horizontal SVG Bar -->
+            <div class="w-full bg-slate-900/80 rounded-xl h-4 overflow-hidden p-0.5 border border-slate-700/50 flex items-center">
+              <div 
+                class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-lg transition-all duration-500"
+                :style="{ width: Math.max((g.average_xp / maxGroupXP) * 100, 3) + '%' }"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Section: Controls, Student Comparison Chart & Roster -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <!-- Left 2 Columns: Student Performance Table -->
+        <!-- Left 2 Columns: Student Controls, Comparison Chart & Roster -->
         <div class="lg:col-span-2 space-y-5">
           
-          <!-- Controls Bar: Search, Group Filter & Sort -->
+          <!-- Controls Bar -->
           <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-5 rounded-3xl shadow-lg flex flex-col sm:flex-row gap-4 justify-between items-center">
             
             <!-- Search Input -->
-            <div class="relative w-full sm:w-72">
+            <div class="relative w-full sm:w-64">
               <input 
                 v-model="searchQuery" 
                 type="text" 
-                placeholder="ابحث باسم الطالب أو المعرف..."
-                class="w-full bg-slate-900/90 border border-slate-700/80 text-white rounded-2xl pr-10 pl-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                placeholder="Search student or email..."
+                class="w-full bg-slate-900/90 border border-slate-700/80 text-white rounded-2xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               />
-              <svg class="w-5 h-5 text-slate-400 absolute right-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <svg class="w-5 h-5 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </div>
 
             <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-              <!-- Group Filter Dropdown -->
+              <!-- Filter by Group Dropdown -->
               <select 
                 v-model="selectedGroupFilter"
                 class="bg-slate-900/90 border border-slate-700/80 text-slate-200 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 font-medium"
               >
-                <option value="ALL">جميع المجموعات</option>
-                <option v-for="g in analytics.groups" :key="g.id" :value="g.name">{{ g.name }}</option>
+                <option value="ALL">All Groups</option>
+                <option v-for="g in analytics.groups" :key="g.id" :value="g.id">{{ g.name }}</option>
               </select>
 
               <!-- Sort Dropdown -->
@@ -249,19 +304,41 @@ const executeDelete = async () => {
                 v-model="sortBy"
                 class="bg-slate-900/90 border border-slate-700/80 text-slate-200 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 font-medium"
               >
-                <option value="xp_desc">ترتيب: النقاط (الأعلى أولاً)</option>
-                <option value="passed_desc">ترتيب: الأسئلة المحلولة</option>
-                <option value="rate_desc">ترتيب: نسبة النجاح</option>
+                <option value="xp_desc">Sort: Highest XP</option>
+                <option value="passed_desc">Sort: Questions Solved</option>
+                <option value="rate_desc">Sort: Success Rate</option>
               </select>
             </div>
 
+          </div>
+
+          <!-- Student-to-Student Comparison Bar Chart in Selected View -->
+          <div v-if="filteredStudents.length > 0" class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl space-y-4">
+            <h4 class="text-sm font-bold text-white flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+              <span>Student Comparison (XP Ranking)</span>
+            </h4>
+            <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <div v-for="s in filteredStudents.slice(0, 8)" :key="s.id" class="space-y-1">
+                <div class="flex justify-between text-[11px] font-medium text-slate-300">
+                  <span class="truncate max-w-[150px]">{{ s.full_name }}</span>
+                  <span class="font-mono text-emerald-400 font-bold">{{ s.xp }} XP</span>
+                </div>
+                <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden">
+                  <div 
+                    class="bg-gradient-to-r from-emerald-400 to-teal-500 h-full rounded-full transition-all duration-300"
+                    :style="{ width: Math.max((s.xp / maxStudentXPInGroup) * 100, 4) + '%' }"
+                  ></div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Students Table Card -->
           <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 rounded-3xl shadow-xl overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-700/60 flex items-center justify-between">
               <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                <span>سجل أداء الطلاب</span>
+                <span>Student Roster</span>
                 <span class="bg-indigo-500/20 text-indigo-400 text-xs font-black px-2.5 py-0.5 rounded-full">
                   {{ filteredStudents.length }}
                 </span>
@@ -269,16 +346,16 @@ const executeDelete = async () => {
             </div>
 
             <div class="overflow-x-auto">
-              <table class="w-full text-right border-collapse">
+              <table class="w-full text-left border-collapse">
                 <thead>
                   <tr class="bg-slate-900/50 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700/60">
-                    <th class="px-6 py-4">الطالب</th>
-                    <th class="px-6 py-4">المجموعة</th>
-                    <th class="px-6 py-4">المستوى & XP</th>
-                    <th class="px-6 py-4">المحلولة</th>
-                    <th class="px-6 py-4">نسبة النجاح</th>
-                    <th class="px-6 py-4">آخر نشاط</th>
-                    <th class="px-6 py-4 text-center">إجراءات</th>
+                    <th class="px-6 py-4">Student</th>
+                    <th class="px-6 py-4">Group</th>
+                    <th class="px-6 py-4">Level & XP</th>
+                    <th class="px-6 py-4">Solved</th>
+                    <th class="px-6 py-4">Success Rate</th>
+                    <th class="px-6 py-4">Last Active</th>
+                    <th class="px-6 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-700/40 text-sm">
@@ -325,7 +402,7 @@ const executeDelete = async () => {
                       <span class="font-mono font-bold text-emerald-400 text-base">
                         {{ s.passed_questions }}
                       </span>
-                      <span class="text-slate-500 text-xs mr-1">سؤال</span>
+                      <span class="text-slate-500 text-xs ml-1">tasks</span>
                     </td>
 
                     <!-- Success Rate -->
@@ -351,7 +428,7 @@ const executeDelete = async () => {
                       <button 
                         @click="confirmDelete(s)" 
                         class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
-                        title="حذف حساب الطالب"
+                        title="Delete Student"
                       >
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                       </button>
@@ -362,7 +439,7 @@ const executeDelete = async () => {
               </table>
 
               <div v-if="filteredStudents.length === 0" class="p-8 text-center text-slate-400 text-sm">
-                لا يوجد طلاب مطابقون للبحث والفلترة الحالية.
+                No students found matching your filters.
               </div>
             </div>
 
@@ -370,51 +447,51 @@ const executeDelete = async () => {
 
         </div>
 
-        <!-- Right 1 Column: Groups Summary & Live Activity Stream -->
+        <!-- Right 1 Column: Group List & Activity Stream -->
         <div class="space-y-6">
           
-          <!-- Student Groups Overview Card -->
+          <!-- Groups Overview Card -->
           <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl">
             <h3 class="text-lg font-bold text-white mb-4 flex items-center justify-between">
-              <span>المجموعات الدراسية</span>
-              <span class="text-xs text-slate-400 font-normal">إجمالي: {{ analytics.groups.length }}</span>
+              <span>Your Student Groups</span>
+              <span class="text-xs text-slate-400 font-normal">Total: {{ analytics.groups.length }}</span>
             </h3>
 
             <div class="space-y-3">
               <div 
                 v-for="g in analytics.groups" 
                 :key="g.id"
-                @click="selectedGroupFilter = (selectedGroupFilter === g.name ? 'ALL' : g.name)"
+                @click="selectedGroupFilter = (selectedGroupFilter === g.id ? 'ALL' : g.id)"
                 :class="{
                   'p-4 rounded-2xl border transition-all cursor-pointer': true,
-                  'bg-indigo-500/10 border-indigo-500/50 shadow-md': selectedGroupFilter === g.name,
-                  'bg-slate-900/60 border-slate-700/60 hover:border-slate-600': selectedGroupFilter !== g.name
+                  'bg-indigo-500/10 border-indigo-500/50 shadow-md': selectedGroupFilter === g.id,
+                  'bg-slate-900/60 border-slate-700/60 hover:border-slate-600': selectedGroupFilter !== g.id
                 }"
               >
                 <div class="flex items-center justify-between mb-2">
                   <div class="font-bold text-white text-sm">{{ g.name }}</div>
                   <span class="text-xs bg-slate-700/80 text-slate-300 font-bold px-2 py-0.5 rounded-lg">
-                    {{ g.student_count }} طلاب
+                    {{ g.student_count }} students
                   </span>
                 </div>
 
                 <div class="flex items-center justify-between text-xs text-slate-400">
-                  <span>متوسط النقاط: <b class="text-amber-400 font-mono">{{ g.average_xp }} XP</b></span>
-                  <span>المحلولة: <b class="text-emerald-400 font-mono">{{ g.passed_count }}</b></span>
+                  <span>Average XP: <b class="text-amber-400 font-mono">{{ g.average_xp }} XP</b></span>
+                  <span>Passed: <b class="text-emerald-400 font-mono">{{ g.passed_count }}</b></span>
                 </div>
               </div>
 
               <div v-if="analytics.groups.length === 0" class="text-xs text-slate-500 text-center py-4">
-                لا تتوفر مجموعات حالياً.
+                No groups created yet.
               </div>
             </div>
           </div>
 
-          <!-- Live Recent Activity Stream Widget -->
+          <!-- Live Activity Stream -->
           <div class="bg-slate-800/80 backdrop-blur border border-slate-700/70 p-6 rounded-3xl shadow-xl">
             <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>سجل الأنشطة المباشر</span>
+              <span>Recent Activity Feed</span>
             </h3>
 
             <div class="space-y-3 max-h-96 overflow-y-auto pr-1">
@@ -450,7 +527,7 @@ const executeDelete = async () => {
               </div>
 
               <div v-if="!analytics.activity_feed || analytics.activity_feed.length === 0" class="text-xs text-slate-500 text-center py-4">
-                لا توجد أنشطة تسليم حديثة.
+                No recent activity.
               </div>
             </div>
           </div>
@@ -465,24 +542,24 @@ const executeDelete = async () => {
     <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 overflow-y-auto">
       <div class="flex items-center justify-center min-h-screen p-4">
         <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" @click="cancelDelete"></div>
-        <div class="relative bg-slate-800 rounded-3xl max-w-md w-full p-6 border border-slate-700 shadow-2xl text-right" dir="rtl">
+        <div class="relative bg-slate-800 rounded-3xl max-w-md w-full p-6 border border-slate-700 shadow-2xl text-left">
           <div class="flex items-start gap-4">
-            <div class="p-3 bg-red-500/20 rounded-2xl text-red-400">
+            <div class="p-3 bg-red-500/20 rounded-2xl text-red-400 shrink-0">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
             </div>
             <div>
-              <h3 class="text-lg font-bold text-white mb-1">حذف حساب الطالب</h3>
+              <h3 class="text-lg font-bold text-white mb-1">Delete Student Account</h3>
               <p class="text-sm text-slate-400">
-                هل أنت تأكد من رغبتك في حذف حساب الطالب <b class="text-white">{{ userToDelete?.full_name }}</b>؟ لا يمكن التراجع عن هذا الإجراء.
+                Are you sure you want to permanently delete <b class="text-white">{{ userToDelete?.full_name }}</b>? This action cannot be undone.
               </p>
             </div>
           </div>
           <div class="mt-6 flex justify-end gap-3">
             <button @click="cancelDelete" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-sm font-semibold transition-all cursor-pointer">
-              إلغاء
+              Cancel
             </button>
             <button @click="executeDelete" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-600/30 transition-all cursor-pointer">
-              تأكيد الحذف
+              Delete Account
             </button>
           </div>
         </div>

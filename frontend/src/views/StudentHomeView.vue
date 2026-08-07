@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../config.js'
 const router = useRouter()
 const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 const stats = ref(null)
+const peerData = ref([])
 const loading = ref(true)
 
 onMounted(async () => {
@@ -17,15 +18,22 @@ onMounted(async () => {
   }
 
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/student-stats`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    stats.value = response.data
+    const [statsRes, peerRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/api/student-stats`, { headers: { Authorization: `Bearer ${token}` } }),
+      axios.get(`${API_BASE_URL}/api/student-group-peers`, { headers: { Authorization: `Bearer ${token}` } })
+    ])
+    stats.value = statsRes.data
+    peerData.value = peerRes.data.peers || []
   } catch (err) {
     console.error('Failed to load student stats:', err)
   } finally {
     loading.value = false
   }
+})
+
+const maxPeerXP = computed(() => {
+  if (peerData.value.length === 0) return 100
+  return Math.max(...peerData.value.map(p => p.xp), 100)
 })
 
 const levelTitles = [
@@ -222,6 +230,41 @@ const goToCurrentStage = () => {
           </div>
           <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats?.completed_stages || 0 }}<span class="text-sm font-semibold text-slate-400"> / {{ stats?.total_stages || 0 }}</span></p>
           <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Stages Completed</p>
+        </div>
+      </div>
+
+      <!-- Group Peer Comparison Chart Card (Requirement 7) -->
+      <div v-if="peerData.length > 0" class="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+              <span>Class Leaderboard & Peer Comparison</span>
+            </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Compare your XP progress with your classmates</p>
+          </div>
+          <span class="text-xs font-bold px-3 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-700">
+            {{ peerData.length }} Classmates
+          </span>
+        </div>
+
+        <div class="space-y-3 pt-2">
+          <div v-for="p in peerData" :key="p.label" class="space-y-1">
+            <div class="flex justify-between text-xs font-semibold">
+              <span :class="p.is_current_user ? 'text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center gap-1.5' : 'text-slate-700 dark:text-slate-300'">
+                <span v-if="p.is_current_user" class="px-1.5 py-0.5 text-[10px] bg-indigo-600 text-white rounded-md">YOU</span>
+                <span>{{ p.label }}</span>
+              </span>
+              <span class="font-mono text-slate-600 dark:text-slate-300">{{ p.xp }} XP</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-700/60 rounded-xl h-3.5 overflow-hidden p-0.5">
+              <div 
+                :class="p.is_current_user ? 'bg-gradient-to-r from-indigo-500 to-purple-600 shadow-md shadow-indigo-500/30' : 'bg-slate-300 dark:bg-slate-600'"
+                class="h-full rounded-lg transition-all duration-700"
+                :style="{ width: Math.max((p.xp / maxPeerXP) * 100, 4) + '%' }"
+              ></div>
+            </div>
+          </div>
         </div>
       </div>
 
