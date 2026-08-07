@@ -50,8 +50,6 @@ func main() {
 		protected.PUT("/theme", controllers.UpdateTheme)
 		protected.GET("/student-stats", controllers.GetStudentStats)
 		protected.GET("/mentor/analytics", middleware.RoleMiddleware("Admin", "Supervisor", "Mentor"), controllers.GetMentorAnalytics)
-		protected.GET("/mentor/group-comparison", middleware.RoleMiddleware("Admin", "Supervisor", "Mentor"), controllers.GetGroupComparison)
-		protected.GET("/student-group-peers", controllers.GetStudentGroupPeers)
 
 		// Admin, Supervisor, & Mentor can access the basic user list
 		usersGroup := protected.Group("/users")
@@ -68,6 +66,7 @@ func main() {
 			groupsGroup.GET("", controllers.GetGroups)
 			groupsGroup.GET("/:id", controllers.GetGroupByID)
 			groupsGroup.POST("", controllers.CreateGroup)
+			groupsGroup.PUT("/:id", controllers.UpdateGroup)
 			groupsGroup.DELETE("/:id", controllers.DeleteGroup)
 		}
 

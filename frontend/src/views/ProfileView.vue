@@ -17,12 +17,24 @@ const loading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 
-onMounted(() => {
+const studentStats = ref(null)
+
+onMounted(async () => {
   const userStr = localStorage.getItem('user')
+  const token = localStorage.getItem('token')
   if (userStr) {
     user.value = JSON.parse(userStr)
     form.value.email = user.value.email
     form.value.avatar = user.value.avatar || ''
+
+    if (token) {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/student-stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        studentStats.value = res.data
+      } catch (e) {}
+    }
   }
 })
 
@@ -139,6 +151,43 @@ const updateProfile = async () => {
                 <span class="text-base font-medium text-slate-900 dark:text-slate-200 w-2/3">{{ user.date_of_birth }}</span>
             </li>
         </ul>
+
+        <!-- Cohort Group Performance Comparison Chart (Requirement 7) -->
+        <div v-if="studentStats && user.role === 'Student'" class="mt-8 max-w-xl mx-auto bg-slate-900/60 border border-slate-700/60 rounded-2xl p-6 shadow-lg text-slate-100 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+              <span>Cohort Performance Comparison</span>
+            </h3>
+            <span class="text-xs text-indigo-400 font-mono font-bold">Lvl {{ studentStats.level }} ({{ studentStats.xp }} XP)</span>
+          </div>
+
+          <p class="text-xs text-slate-400">Comparing your achievements with your group members' average</p>
+
+          <div class="space-y-3 pt-2">
+            <!-- XP Comparison -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300">XP Points</span>
+                <span class="font-mono text-slate-400">You: <b class="text-amber-400">{{ studentStats.xp }}</b> | Group Avg: <b class="text-indigo-400">{{ studentStats.group_avg_xp }}</b></span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-lg h-3 flex overflow-hidden">
+                <div class="bg-gradient-to-r from-amber-500 to-indigo-500 h-full transition-all" :style="{ width: Math.min((studentStats.xp / Math.max(studentStats.xp, studentStats.group_avg_xp, 1)) * 100, 100) + '%' }"></div>
+              </div>
+            </div>
+
+            <!-- Solved Tasks -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300">Solved Stage Tasks</span>
+                <span class="font-mono text-slate-400">You: <b class="text-emerald-400">{{ studentStats.passed_questions }}</b> | Group Avg: <b class="text-teal-400">{{ studentStats.group_avg_passed }}</b></span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-lg h-3 flex overflow-hidden">
+                <div class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all" :style="{ width: Math.min((studentStats.passed_questions / Math.max(studentStats.passed_questions, studentStats.group_avg_passed, 1)) * 100, 100) + '%' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div class="mt-10 max-w-xl mx-auto">
             <div class="flex justify-between items-center mb-4">

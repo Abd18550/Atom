@@ -17,7 +17,6 @@ type CreateGroupInput struct {
 
 func CreateGroup(c *gin.Context) {
 	creatorRole, _ := c.Get("role")
-	creatorID, _ := c.Get("userID")
 
 	if creatorRole == "Student" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Students cannot create groups"})
@@ -30,11 +29,21 @@ func CreateGroup(c *gin.Context) {
 		return
 	}
 
+	var creatorID *uint
+	if uid, exists := c.Get("userID"); exists {
+		if id, ok := uid.(uint); ok {
+			creatorID = &id
+		} else if idFloat, ok := uid.(float64); ok {
+			idUint := uint(idFloat)
+			creatorID = &idUint
+		}
+	}
+
 	group := models.StudentGroup{
-		SchoolName:   input.SchoolName,
-		Class:        input.Class,
-		AcademicYear: input.AcademicYear,
-		CreatedByID:  creatorID.(uint),
+		SchoolName:      input.SchoolName,
+		Class:           input.Class,
+		AcademicYear:    input.AcademicYear,
+		CreatedByUserID: creatorID,
 	}
 
 	if err := database.DB.Create(&group).Error; err != nil {
@@ -42,29 +51,38 @@ func CreateGroup(c *gin.Context) {
 		return
 	}
 
+	database.DB.Preload("CreatedBy").First(&group, group.ID)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":  "Group created successfully",
 		"group_id": group.ID,
+		"group":    group,
 	})
 }
 
-// GetGroups returns groups filtered by ownership:
-// - Mentors only see groups they created
-// - Admins/Supervisors see all groups
 func GetGroups(c *gin.Context) {
-	role, _ := c.Get("role")
-	userID, _ := c.Get("userID")
-
+	creatorRole, _ := c.Get("role")
 	var groups []models.StudentGroup
 
-	query := database.DB
-	if role == "Mentor" {
-		query = query.Where("created_by_id = ?", userID)
-	}
+	if creatorRole == "Admin" || creatorRole == "Supervisor" {
+		if err := database.DB.Preload("CreatedBy").Find(&groups).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch groups"})
+			return
+		}
+	} else { // Mentor
+		var mentorID uint
+		if uid, exists := c.Get("userID"); exists {
+			if id, ok := uid.(uint); ok {
+				mentorID = id
+			} else if idFloat, ok := uid.(float64); ok {
+				mentorID = uint(idFloat)
+			}
+		}
 
-	if err := query.Find(&groups).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch groups"})
-		return
+		if err := database.DB.Preload("CreatedBy").Where("created_by_user_id = ?", mentorID).Find(&groups).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch mentor groups"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, groups)
@@ -72,28 +90,19 @@ func GetGroups(c *gin.Context) {
 
 func GetGroupByID(c *gin.Context) {
 	groupID := c.Param("id")
-	role, _ := c.Get("role")
-	userID, _ := c.Get("userID")
 
 	var group models.StudentGroup
-	if err := database.DB.First(&group, groupID).Error; err != nil {
+	if err := database.DB.Preload("CreatedBy").First(&group, groupID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
-		return
-	}
-
-	// Mentors can only view groups they created
-	if role == "Mentor" && group.CreatedByID != userID.(uint) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have access to this group"})
 		return
 	}
 
 	c.JSON(http.StatusOK, group)
 }
 
-func DeleteGroup(c *gin.Context) {
+func UpdateGroup(c *gin.Context) {
 	groupID := c.Param("id")
-	role, _ := c.Get("role")
-	userID, _ := c.Get("userID")
+	creatorRole, _ := c.Get("role")
 
 	var group models.StudentGroup
 	if err := database.DB.First(&group, groupID).Error; err != nil {
@@ -101,13 +110,70 @@ func DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	// Mentors can only delete groups they created
-	if role == "Mentor" && group.CreatedByID != userID.(uint) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only delete groups you created"})
+	// Check ownership if mentor
+	if creatorRole != "Admin" && creatorRole != "Supervisor" {
+		var mentorID uint
+		if uid, exists := c.Get("userID"); exists {
+			if id, ok := uid.(uint); ok {
+				mentorID = id
+			} else if idFloat, ok := uid.(float64); ok {
+				mentorID = uint(idFloat)
+			}
+		}
+
+		if group.CreatedByUserID == nil || *group.CreatedByUserID != mentorID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to edit this group"})
+			return
+		}
+	}
+
+	var input CreateGroupInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Unassign students from the group first
+	group.SchoolName = input.SchoolName
+	group.Class = input.Class
+	group.AcademicYear = input.AcademicYear
+
+	if err := database.DB.Save(&group).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update group"})
+		return
+	}
+
+	database.DB.Preload("CreatedBy").First(&group, group.ID)
+	c.JSON(http.StatusOK, gin.H{"message": "Group updated successfully", "group": group})
+}
+
+func DeleteGroup(c *gin.Context) {
+	groupID := c.Param("id")
+	creatorRole, _ := c.Get("role")
+
+	var group models.StudentGroup
+	if err := database.DB.First(&group, groupID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
+		return
+	}
+
+	// Check ownership if mentor
+	if creatorRole != "Admin" && creatorRole != "Supervisor" {
+		var mentorID uint
+		if uid, exists := c.Get("userID"); exists {
+			if id, ok := uid.(uint); ok {
+				mentorID = id
+			} else if idFloat, ok := uid.(float64); ok {
+				mentorID = uint(idFloat)
+			}
+		}
+
+		if group.CreatedByUserID == nil || *group.CreatedByUserID != mentorID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to delete this group"})
+			return
+		}
+	}
+
+	// Unassign students linked to this group
 	database.DB.Model(&models.User{}).Where("student_group_id = ?", group.ID).Update("student_group_id", nil)
 
 	if err := database.DB.Delete(&group).Error; err != nil {
