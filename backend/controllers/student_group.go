@@ -155,19 +155,19 @@ func DeleteGroup(c *gin.Context) {
 	var students []models.User
 	database.DB.Where("student_group_id = ?", group.ID).Find(&students)
 
-	// 2. Delete all submissions and user accounts for all students in this group
+	// 2. Delete all submissions and user records for each student in the group
 	for _, student := range students {
 		database.DB.Where("user_id = ?", student.ID).Delete(&models.Submission{})
-		database.DB.Unscoped().Delete(&student)
+		database.DB.Delete(&student)
 	}
 
 	// 3. Delete the group record itself
-	if err := database.DB.Unscoped().Delete(&models.StudentGroup{}, group.ID).Error; err != nil {
+	if err := database.DB.Delete(&group).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Group deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Group and all member students deleted successfully"})
 }
 
 func AssignStudentToGroup(c *gin.Context) {

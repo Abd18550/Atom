@@ -43,9 +43,18 @@ func ConnectDB() {
 
 	DB = database
 
-	// Run seeders
+	// Run seeders & wipe test data for fresh hosting launch
 	seedStagesAndExercises(DB)
 	seedAdmin()
+	wipeAllTestData(DB)
+}
+
+func wipeAllTestData(db *gorm.DB) {
+	log.Println("Wiping all test submissions, students, and groups for fresh launch...")
+	db.Exec("DELETE FROM submissions;")
+	db.Exec("DELETE FROM users WHERE role != 'Admin';")
+	db.Exec("DELETE FROM student_groups;")
+	log.Println("Database wiped successfully. Clean state ready.")
 }
 
 func seedAdmin() {

@@ -176,10 +176,11 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	// Delete all submissions created by this user first
+	// 1. Delete all submissions associated with this user
 	database.DB.Where("user_id = ?", targetUser.ID).Delete(&models.Submission{})
 
-	if err := database.DB.Unscoped().Delete(&targetUser).Error; err != nil {
+	// 2. Delete user account
+	if err := database.DB.Delete(&targetUser).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
 		return
 	}
@@ -313,33 +314,4 @@ func UpdateTheme(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Theme updated successfully", "theme": user.Theme})
-}
-
-// ResetDatabase wipes all non-admin data (submissions, student groups, and non-admin users)
-func ResetDatabase(c *gin.Context) {
-	creatorRole, _ := c.Get("role")
-	if creatorRole != "Admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only Admins can perform a database reset"})
-		return
-	}
-
-	// Delete all submissions
-	if err := database.DB.Exec("DELETE FROM submissions;").Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear submissions"})
-		return
-	}
-
-	// Delete all non-admin users
-	if err := database.DB.Exec("DELETE FROM users WHERE role != 'Admin';").Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear users"})
-		return
-	}
-
-	// Delete all student groups
-	if err := database.DB.Exec("DELETE FROM student_groups;").Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear student groups"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Database wiped successfully! All student accounts, groups, and submissions have been cleared."})
 }
