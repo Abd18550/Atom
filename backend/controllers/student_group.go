@@ -1,9 +1,7 @@
 package controllers
 
 import (
-	"log"
 	"net/http"
-	"strconv"
 
 	"backend/database"
 	"backend/models"
@@ -51,24 +49,27 @@ func CreateGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Group created successfully", "group": group})
+	c.JSON(http.StatusCreated, gin.H{
+		"message":  "Group created successfully",
+		"group_id": group.ID,
+		"group":    group,
+	})
 }
 
-// GetGroups filters groups by creator for Mentors or returns all for Admin/Supervisor
 func GetGroups(c *gin.Context) {
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
 	var groups []models.StudentGroup
-	query := database.DB.Preload("CreatedBy")
 
+	query := database.DB.Preload("CreatedBy")
 	if creatorRole == "Mentor" {
-		query = query.Where("created_by_id = ? OR created_by_id = 0 OR created_by_id IS NULL", userID)
+		query = query.Where("created_by_id = ?", userID)
 	}
 
 	if err := query.Find(&groups).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch groups"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch groups"})
 		return
 	}
 
@@ -76,24 +77,18 @@ func GetGroups(c *gin.Context) {
 }
 
 func GetGroupByID(c *gin.Context) {
-	groupIDStr := c.Param("id")
-	idNum, err := strconv.Atoi(groupIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID format"})
-		return
-	}
-
+	groupID := c.Param("id")
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
 	var group models.StudentGroup
-	if err := database.DB.Preload("CreatedBy").Where("id = ?", idNum).First(&group).Error; err != nil {
+	if err := database.DB.Preload("CreatedBy").First(&group, groupID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
 
-	if creatorRole == "Mentor" && group.CreatedByID != 0 && group.CreatedByID != userID {
+	if creatorRole == "Mentor" && group.CreatedByID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You can only view groups you created."})
 		return
 	}
@@ -102,24 +97,18 @@ func GetGroupByID(c *gin.Context) {
 }
 
 func UpdateGroup(c *gin.Context) {
-	groupIDStr := c.Param("id")
-	idNum, err := strconv.Atoi(groupIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID format"})
-		return
-	}
-
+	groupID := c.Param("id")
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
 	var group models.StudentGroup
-	if err := database.DB.Where("id = ?", idNum).First(&group).Error; err != nil {
+	if err := database.DB.First(&group, groupID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
 
-	if creatorRole == "Mentor" && group.CreatedByID != 0 && group.CreatedByID != userID {
+	if creatorRole == "Mentor" && group.CreatedByID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You can only manage groups you created."})
 		return
 	}
@@ -133,9 +122,6 @@ func UpdateGroup(c *gin.Context) {
 	group.SchoolName = input.SchoolName
 	group.Class = input.Class
 	group.AcademicYear = input.AcademicYear
-	if group.CreatedByID == 0 {
-		group.CreatedByID = userID
-	}
 
 	if err := database.DB.Save(&group).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update group"})
@@ -146,60 +132,41 @@ func UpdateGroup(c *gin.Context) {
 }
 
 func DeleteGroup(c *gin.Context) {
-	groupIDStr := c.Param("id")
-	idNum, err := strconv.Atoi(groupIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID format"})
-		return
-	}
-
+	groupID := c.Param("id")
 	creatorRole, _ := c.Get("role")
 	userIDVal, _ := c.Get("userID")
 	userID := userIDVal.(uint)
 
-	log.Printf("[DeleteGroup] Attempting delete for group ID: %d by user %d (role: %s)", idNum, userID, creatorRole)
-
 	var group models.StudentGroup
-	if err := database.DB.Where("id = ?", idNum).First(&group).Error; err != nil {
-		log.Printf("[DeleteGroup] Group ID %d not found in DB: %v", idNum, err)
+	if err := database.DB.First(&group, groupID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 		return
 	}
 
-	if creatorRole == "Mentor" && group.CreatedByID != 0 && group.CreatedByID != userID {
-		log.Printf("[DeleteGroup] Forbidden delete for group ID %d created by %d", idNum, group.CreatedByID)
+	if creatorRole == "Mentor" && group.CreatedByID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied. You can only delete groups you created."})
 		return
 	}
 
-	// 1. Find all student user IDs belonging to this group
+	// 1. Fetch all student IDs belonging to this group
 	var studentIDs []uint
-	database.DB.Model(&models.User{}).Where("student_group_id = ?", group.ID).Pluck("id", &studentIDs)
+	database.DB.Model(&models.User{}).Where("student_group_id = ? AND role = ?", group.ID, "Student").Pluck("id", &studentIDs)
 
-	// 2. If there are students in this group, delete all their submissions first
 	if len(studentIDs) > 0 {
-		if err := database.DB.Where("user_id IN (?)", studentIDs).Delete(&models.Submission{}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete student submissions for group"})
-			return
-		}
+		// 2. Delete all submissions created by students in this group
+		database.DB.Where("user_id IN ?", studentIDs).Delete(&models.Submission{})
 
-		// 3. Delete all student users in this group
-		if err := database.DB.Where("id IN (?)", studentIDs).Delete(&models.User{}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete students in group"})
-			return
-		}
+		// 3. Delete all student user accounts belonging to this group
+		database.DB.Where("id IN ?", studentIDs).Delete(&models.User{})
 	}
 
-	// 4. Clear any lingering foreign keys if any non-student was linked
-	database.DB.Model(&models.User{}).Where("student_group_id = ?", group.ID).Update("student_group_id", nil)
-
-	// 5. Delete the StudentGroup record itself
+	// 4. Delete the group itself
 	if err := database.DB.Delete(&group).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Group and all assigned students were deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Group and all member student accounts deleted successfully"})
 }
 
 func AssignStudentToGroup(c *gin.Context) {

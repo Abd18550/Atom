@@ -58,7 +58,7 @@ func GetMentorAnalytics(c *gin.Context) {
 	var groups []models.StudentGroup
 	groupQuery := database.DB.Preload("CreatedBy")
 	if creatorRole == "Mentor" {
-		groupQuery = groupQuery.Where("created_by_id = ? OR created_by_id = 0 OR created_by_id IS NULL", userID)
+		groupQuery = groupQuery.Where("created_by_id = ?", userID)
 	}
 	groupQuery.Find(&groups)
 

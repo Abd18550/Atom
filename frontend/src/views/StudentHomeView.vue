@@ -7,7 +7,6 @@ import { API_BASE_URL } from '../config.js'
 const router = useRouter()
 const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 const stats = ref(null)
-const groupData = ref(null)
 const loading = ref(true)
 
 onMounted(async () => {
@@ -18,12 +17,8 @@ onMounted(async () => {
   }
 
   try {
-    const [statsRes, groupRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/student-stats`, { headers: { Authorization: `Bearer ${token}` } }),
-      axios.get(`${API_BASE_URL}/api/student/group-comparison`, { headers: { Authorization: `Bearer ${token}` } })
-    ])
+    const statsRes = await axios.get(`${API_BASE_URL}/api/student-stats`, { headers: { Authorization: `Bearer ${token}` } })
     stats.value = statsRes.data
-    groupData.value = groupRes.data
   } catch (err) {
     console.error('Failed to load student dashboard data:', err)
   } finally {
@@ -65,11 +60,6 @@ const stageProgress = computed(() => {
   if (!stats.value) return 0
   if (stats.value.total_stages === 0) return 0
   return Math.round((stats.value.completed_stages / stats.value.total_stages) * 100)
-})
-
-const maxGroupPeerXP = computed(() => {
-  if (!groupData.value || !groupData.value.peers || groupData.value.peers.length === 0) return 100
-  return Math.max(...groupData.value.peers.map(p => p.xp), groupData.value.group_avg_xp || 0, 100)
 })
 
 const greetingMessage = computed(() => {
@@ -230,127 +220,6 @@ const goToCurrentStage = () => {
           </div>
           <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats?.completed_stages || 0 }}<span class="text-sm font-semibold text-slate-400"> / {{ stats?.total_stages || 0 }}</span></p>
           <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Stages Completed</p>
-        </div>
-      </div>
-
-      <!-- Group Leaderboard & Peer Comparison Section -->
-      <div v-if="groupData && groupData.in_group" class="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-xl space-y-5">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 dark:border-slate-700/60 pb-4">
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="p-2 bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-              </span>
-              <h2 class="text-xl font-bold text-slate-900 dark:text-white">Class Leaderboard</h2>
-            </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Comparing performance within <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ groupData.group_name }}</span></p>
-          </div>
-
-          <!-- My Rank Badge -->
-          <div class="flex items-center gap-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-2 rounded-2xl shadow-md">
-            <div>
-              <p class="text-[10px] uppercase font-bold text-indigo-200">Your Rank</p>
-              <p class="text-lg font-black leading-none">#{{ groupData.my_rank }} <span class="text-xs font-normal text-indigo-100">of {{ groupData.total_students }}</span></p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Visual Dedicated Vertical Column Chart (XY Positive Axes System) -->
-        <div class="space-y-3">
-          <div class="flex justify-between items-center text-xs">
-            <span class="font-bold text-slate-700 dark:text-slate-200">Class Performance Comparison Chart</span>
-            <span class="font-bold text-amber-500">Your XP: {{ groupData.my_xp }} • Class Avg: {{ groupData.group_avg_xp }} XP</span>
-          </div>
-
-          <div class="relative w-full h-72 pt-8 pb-12 px-8 bg-slate-50 dark:bg-slate-900/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-end">
-            <!-- Y-Axis Ticks & Horizontal Grid Lines -->
-            <div class="absolute inset-y-8 left-2 right-4 flex flex-col justify-between pointer-events-none text-[10px] font-mono text-slate-400 dark:text-slate-500">
-              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
-                <span class="w-10 text-right pr-2 font-bold text-amber-500">{{ Math.round(maxGroupPeerXP) }} XP</span>
-              </div>
-              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
-                <span class="w-10 text-right pr-2">{{ Math.round(maxGroupPeerXP * 0.75) }}</span>
-              </div>
-              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
-                <span class="w-10 text-right pr-2">{{ Math.round(maxGroupPeerXP * 0.5) }}</span>
-              </div>
-              <div class="flex items-center w-full border-b border-slate-200/80 dark:border-slate-800/80">
-                <span class="w-10 text-right pr-2">{{ Math.round(maxGroupPeerXP * 0.25) }}</span>
-              </div>
-              <div class="flex items-center w-full border-b-2 border-indigo-500/60">
-                <span class="w-10 text-right pr-2 text-indigo-500 font-bold">0</span>
-              </div>
-            </div>
-
-            <!-- X-Axis Baseline & Vertical Columns -->
-            <div class="relative ml-10 h-full flex items-end justify-around gap-2 z-10">
-              <div 
-                v-for="peer in groupData.peers" 
-                :key="peer.id" 
-                class="flex-1 flex flex-col items-center h-full justify-end group"
-              >
-                <!-- Top Value Badge -->
-                <span 
-                  class="text-[10px] font-black group-hover:scale-110 transition-transform mb-1 px-1.5 py-0.5 rounded"
-                  :class="peer.is_me ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'bg-slate-200 dark:bg-slate-800 text-amber-500 border border-amber-500/20'"
-                >
-                  {{ peer.xp }} XP
-                </span>
-
-                <!-- Vertical Column Bar extending UPWARDS -->
-                <div 
-                  class="w-full max-w-[42px] bg-slate-200 dark:bg-slate-800/90 rounded-t-xl overflow-hidden flex items-end h-full relative border border-slate-300 dark:border-slate-700/60 shadow-md"
-                >
-                  <div 
-                    class="w-full rounded-t-xl transition-all duration-700 relative"
-                    :class="peer.is_me ? 'bg-gradient-to-t from-amber-500 via-orange-500 to-yellow-400 shadow-lg shadow-amber-500/30' : 'bg-gradient-to-t from-indigo-500 via-purple-500 to-indigo-400 opacity-75'"
-                    :style="{ height: Math.max(6, (peer.xp / maxGroupPeerXP * 100)) + '%' }"
-                  >
-                    <div v-if="peer.is_me" class="absolute inset-0 bg-white/20 animate-pulse rounded-t-xl"></div>
-                  </div>
-                </div>
-
-                <!-- X-Axis Label -->
-                <span 
-                  class="text-[10px] font-bold truncate max-w-[70px] text-center mt-2 group-hover:text-indigo-500 transition-colors"
-                  :class="peer.is_me ? 'text-amber-500 font-black' : 'text-slate-600 dark:text-slate-300'"
-                >
-                  {{ peer.is_me ? 'YOU' : peer.full_name.split(' ')[0] }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Class Peers List -->
-        <div class="space-y-2">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Classmates Standings</h3>
-          <div class="divide-y divide-slate-100 dark:divide-slate-700/50">
-            <div 
-              v-for="(peer, idx) in groupData.peers" 
-              :key="peer.id"
-              class="flex items-center justify-between py-2.5 px-3 rounded-xl transition-colors"
-              :class="peer.is_me ? 'bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200 dark:border-indigo-500/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'"
-            >
-              <div class="flex items-center gap-3">
-                <span 
-                  class="w-6 h-6 flex items-center justify-center rounded-lg text-xs font-black"
-                  :class="idx === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' : idx === 1 ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200' : idx === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'"
-                >
-                  {{ idx + 1 }}
-                </span>
-                <img :src="peer.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + peer.username" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700" />
-                <div>
-                  <p class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    {{ peer.full_name }}
-                    <span v-if="peer.is_me" class="px-1.5 py-0.5 text-[10px] font-extrabold bg-indigo-600 text-white rounded-md">YOU</span>
-                  </p>
-                  <p class="text-[11px] text-slate-400">Level {{ peer.level }} • {{ peer.passed_questions }} Solved</p>
-                </div>
-              </div>
-              <span class="font-black text-amber-500 text-sm">{{ peer.xp }} XP</span>
-            </div>
-          </div>
         </div>
       </div>
 
