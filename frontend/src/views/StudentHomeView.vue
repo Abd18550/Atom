@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../config.js'
 const router = useRouter()
 const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 const stats = ref(null)
+const groupData = ref(null)
 const loading = ref(true)
 
 onMounted(async () => {
@@ -17,13 +18,32 @@ onMounted(async () => {
   }
 
   try {
-    const statsRes = await axios.get(`${API_BASE_URL}/api/student-stats`, { headers: { Authorization: `Bearer ${token}` } })
+    const [statsRes, groupRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/api/student-stats`, { headers: { Authorization: `Bearer ${token}` } }),
+      axios.get(`${API_BASE_URL}/api/student/group-comparison`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: null }))
+    ])
     stats.value = statsRes.data
+    groupData.value = groupRes?.data || null
   } catch (err) {
     console.error('Failed to load student dashboard data:', err)
   } finally {
     loading.value = false
   }
+})
+
+const maxPeerXP = computed(() => {
+  if (!groupData.value || !groupData.value.peers || groupData.value.peers.length === 0) return 100
+  const max = Math.max(...groupData.value.peers.map(p => p.xp), 100)
+  return max > 0 ? max : 100
+})
+
+const peerChartData = computed(() => {
+  if (!groupData.value || !groupData.value.peers) return []
+  const max = maxPeerXP.value || 100
+  return groupData.value.peers.map(p => ({
+    ...p,
+    xpPercent: Math.max(8, Math.min(100, Math.round((p.xp / max) * 100)))
+  }))
 })
 
 const levelTitles = [
@@ -220,6 +240,103 @@ const goToCurrentStage = () => {
           </div>
           <p class="text-2xl font-black text-slate-900 dark:text-white">{{ stats?.completed_stages || 0 }}<span class="text-sm font-semibold text-slate-400"> / {{ stats?.total_stages || 0 }}</span></p>
           <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Stages Completed</p>
+        </div>
+      </div>
+
+      <!-- Class Group Performance Comparison Chart (2D Cartesian Axes Column Chart) -->
+      <div v-if="groupData && groupData.in_group" class="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-xl space-y-5">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 dark:border-slate-700/60 pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="p-2 bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 012-2h2a2 2 0 012 2v6m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+              </span>
+              <h2 class="text-xl font-bold text-slate-900 dark:text-white">Class Performance Chart</h2>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Comparing your XP against classmates in <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ groupData.group_name }}</span></p>
+          </div>
+
+          <!-- Rank & Avg Badge -->
+          <div class="flex items-center gap-3">
+            <div class="bg-slate-100 dark:bg-slate-700/70 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold">
+              Class Avg: {{ groupData.group_avg_xp }} XP
+            </div>
+            <div class="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-1.5 rounded-xl shadow-md text-xs font-black">
+              <span>Your Rank: #{{ groupData.my_rank }}</span>
+              <span class="text-amber-100 font-normal">of {{ groupData.total_students }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2D Positive Cartesian Column Chart (Y-Axis = XP, X-Axis = Classmates) -->
+        <div class="relative w-full bg-slate-50 dark:bg-slate-900/90 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/60 shadow-inner">
+          <div class="flex items-stretch h-56 gap-3">
+            <!-- Y-Axis (المحور الصادي +) -->
+            <div class="flex flex-col justify-between items-end text-[10px] font-mono text-slate-400 dark:text-slate-400 pr-2 border-r-2 border-slate-300 dark:border-slate-600/80 pb-7 select-none">
+              <span>{{ maxPeerXP }}</span>
+              <span>{{ Math.round(maxPeerXP * 0.75) }}</span>
+              <span>{{ Math.round(maxPeerXP * 0.5) }}</span>
+              <span>{{ Math.round(maxPeerXP * 0.25) }}</span>
+              <span>0</span>
+            </div>
+
+            <!-- Chart Columns Container with Grid Lines -->
+            <div class="relative flex-1 flex flex-col justify-between">
+              <!-- Background Horizontal Grid Lines -->
+              <div class="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7">
+                <div class="border-b border-slate-200 dark:border-slate-700/40 w-full"></div>
+                <div class="border-b border-slate-200 dark:border-slate-700/40 w-full"></div>
+                <div class="border-b border-slate-200 dark:border-slate-700/40 w-full"></div>
+                <div class="border-b border-slate-200 dark:border-slate-700/40 w-full"></div>
+                <!-- X-Axis Baseline (المحور السيني +) -->
+                <div class="border-b-2 border-slate-400 dark:border-slate-500/80 w-full"></div>
+              </div>
+
+              <!-- Vertical Column Bars -->
+              <div class="relative z-10 flex-1 flex items-end justify-around px-2 pb-7 gap-2">
+                <div v-for="peer in peerChartData" :key="peer.id" class="flex-1 flex flex-col items-center h-full justify-end group">
+                  <!-- Value Tooltip Badge -->
+                  <div class="mb-1 transition-transform group-hover:scale-105">
+                    <span 
+                      class="text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm border"
+                      :class="peer.is_me ? 'bg-amber-500 text-white border-amber-400' : 'bg-slate-200 dark:bg-slate-950 text-slate-700 dark:text-indigo-300 border-slate-300 dark:border-slate-700'"
+                    >
+                      {{ peer.xp }} XP
+                    </span>
+                  </div>
+
+                  <!-- Column Bar extending vertically upwards -->
+                  <div 
+                    class="w-full max-w-[48px] h-full flex items-end rounded-t-xl overflow-hidden p-0.5 border transition-all"
+                    :class="peer.is_me ? 'bg-amber-500/10 border-amber-400 dark:border-amber-500' : 'bg-slate-200/50 dark:bg-slate-950/40 border-slate-300 dark:border-slate-700/40 group-hover:border-indigo-400'"
+                  >
+                    <div 
+                      class="w-full rounded-t-lg transition-all duration-700 relative"
+                      :class="peer.is_me ? 'bg-gradient-to-t from-amber-500 via-orange-500 to-amber-300' : 'bg-gradient-to-t from-indigo-600 via-purple-500 to-indigo-400'"
+                      :style="{ height: peer.xpPercent + '%' }"
+                    >
+                      <div class="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 rounded-t-lg transition-opacity"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- X-Axis Labels -->
+              <div class="flex justify-around items-center pt-2 px-2 gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                <div 
+                  v-for="peer in peerChartData" 
+                  :key="peer.id" 
+                  class="flex-1 text-center truncate flex flex-col items-center" 
+                  :title="peer.full_name"
+                >
+                  <span :class="peer.is_me ? 'text-amber-600 dark:text-amber-400 font-extrabold' : ''">
+                    {{ peer.full_name.split(' ')[0] }}
+                  </span>
+                  <span v-if="peer.is_me" class="text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.2 rounded mt-0.5">YOU</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
